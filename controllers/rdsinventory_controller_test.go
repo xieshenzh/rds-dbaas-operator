@@ -25,6 +25,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -194,12 +195,12 @@ var _ = Describe("RDSInventoryController", func() {
 						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rdsSecret), rdsSecret); err != nil {
 							return false
 						}
-						if ak, ok := rdsSecret.Data["AWS_ACCESS_KEY_ID"]; !ok || string(ak) != accessKey {
-							return false
-						}
-						if sk, ok := rdsSecret.Data["AWS_SECRET_ACCESS_KEY"]; !ok || string(sk) != secretKey {
-							return false
-						}
+						ak, akOk := rdsSecret.Data["AWS_ACCESS_KEY_ID"]
+						Expect(akOk).Should(BeTrue())
+						Expect(ak).Should(Equal([]byte(accessKey)))
+						sk, skOk := rdsSecret.Data["AWS_SECRET_ACCESS_KEY"]
+						Expect(skOk).Should(BeTrue())
+						Expect(sk).Should(Equal([]byte(secretKey)))
 						return true
 					}, timeout).Should(BeTrue())
 
@@ -214,9 +215,9 @@ var _ = Describe("RDSInventoryController", func() {
 						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rdsConfigMap), rdsConfigMap); err != nil {
 							return false
 						}
-						if r, ok := rdsConfigMap.Data["AWS_REGION"]; !ok || r != region {
-							return false
-						}
+						r, ok := rdsConfigMap.Data["AWS_REGION"]
+						Expect(ok).Should(BeTrue())
+						Expect(r).Should(Equal(region))
 						return true
 					}, timeout).Should(BeTrue())
 
@@ -226,6 +227,56 @@ var _ = Describe("RDSInventoryController", func() {
 							return false
 						}
 						return *deployment.Spec.Replicas == 1 && deployment.Status.Replicas == 1 && deployment.Status.ReadyReplicas == 1
+					}, timeout).Should(BeTrue())
+
+					By("checking Inventory status")
+					inv := &rdsdbaasv1alpha1.RDSInventory{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      inventoryName,
+							Namespace: testNamespace,
+						},
+					}
+					Eventually(func() bool {
+						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(inv), inv); err != nil {
+							return false
+						}
+						condition := apimeta.FindStatusCondition(inv.Status.Conditions, "SpecSynced")
+						if condition == nil || condition.Status != metav1.ConditionTrue || condition.Reason != "SyncOK" {
+							return false
+						}
+						if len(inv.Status.Instances) != 3 {
+							return false
+						}
+						instancesMap := make(map[string]dbaasv1alpha1.Instance, 3)
+						for i := range inv.Status.Instances {
+							ins := inv.Status.Instances[i]
+							instancesMap[ins.InstanceID] = ins
+						}
+						if ins, ok := instancesMap[*dbInstance1.Spec.DBInstanceIdentifier]; !ok {
+							return false
+						} else {
+							Expect(ins.Name).Should(Equal(dbInstance1.Name))
+							s, ok := ins.InstanceInfo["dbInstanceStatus"]
+							Expect(ok).Should(BeTrue())
+							Expect(s).Should(Equal(*dbInstance1.Status.DBInstanceStatus))
+						}
+						if ins, ok := instancesMap[*dbInstance2.Spec.DBInstanceIdentifier]; !ok {
+							return false
+						} else {
+							Expect(ins.Name).Should(Equal(dbInstance2.Name))
+							s, ok := ins.InstanceInfo["dbInstanceStatus"]
+							Expect(ok).Should(BeTrue())
+							Expect(s).Should(Equal(*dbInstance2.Status.DBInstanceStatus))
+						}
+						if ins, ok := instancesMap[*dbInstance3.Spec.DBInstanceIdentifier]; !ok {
+							return false
+						} else {
+							Expect(ins.Name).Should(Equal(dbInstance3.Name))
+							s, ok := ins.InstanceInfo["dbInstanceStatus"]
+							Expect(ok).Should(BeTrue())
+							Expect(s).Should(Equal(*dbInstance3.Status.DBInstanceStatus))
+						}
+						return true
 					}, timeout).Should(BeTrue())
 
 					By("checking if DB instances are adopted")
@@ -248,23 +299,18 @@ var _ = Describe("RDSInventoryController", func() {
 							if !strings.HasPrefix(instance.Name, "mock-db-instance-1") {
 								return false
 							}
-							if typeString, ok := instance.GetAnnotations()[ophandler.TypeAnnotation]; ok && typeString == "RDSInventory.dbaas.redhat.com" {
-								if namespacedNameString, ok := instance.GetAnnotations()[ophandler.NamespacedNameAnnotation]; !ok || namespacedNameString != (testNamespace+"/"+inventoryName) {
-									return false
-								}
-							}
-							if instance.Spec.Kubernetes.GroupKind.Kind != "DBInstance" {
-								return false
-							}
-							if instance.Spec.Kubernetes.GroupKind.Group != rdsv1alpha1.GroupVersion.Group {
-								return false
-							}
-							if instance.Spec.Kubernetes.Metadata.Namespace != testNamespace {
-								return false
-							}
-							if v, ok := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]; !ok || v != "true" {
-								return false
-							}
+							typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
+							Expect(typeOk).Should(BeTrue())
+							Expect(typeString).Should(Equal("RDSInventory.dbaas.redhat.com"))
+							namespacedNameString, nsnOk := instance.GetAnnotations()[ophandler.NamespacedNameAnnotation]
+							Expect(nsnOk).Should(BeTrue())
+							Expect(namespacedNameString).Should(Equal(testNamespace + "/" + inventoryName))
+							Expect(instance.Spec.Kubernetes.GroupKind.Kind).Should(Equal("DBInstance"))
+							Expect(instance.Spec.Kubernetes.GroupKind.Group).Should(Equal(rdsv1alpha1.GroupVersion.Group))
+							Expect(instance.Spec.Kubernetes.Metadata.Namespace).Should(Equal(testNamespace))
+							label, labelOk := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]
+							Expect(labelOk).Should(BeTrue())
+							Expect(label).Should(Equal("true"))
 						}
 						if instance, ok := dbInstancesMap["mock-db-instance-2"]; !ok {
 							return false
@@ -272,23 +318,18 @@ var _ = Describe("RDSInventoryController", func() {
 							if !strings.HasPrefix(instance.Name, "mock-db-instance-2") {
 								return false
 							}
-							if typeString, ok := instance.GetAnnotations()[ophandler.TypeAnnotation]; ok && typeString == "RDSInventory.dbaas.redhat.com" {
-								if namespacedNameString, ok := instance.GetAnnotations()[ophandler.NamespacedNameAnnotation]; !ok || namespacedNameString != (testNamespace+"/"+inventoryName) {
-									return false
-								}
-							}
-							if instance.Spec.Kubernetes.GroupKind.Kind != "DBInstance" {
-								return false
-							}
-							if instance.Spec.Kubernetes.GroupKind.Group != rdsv1alpha1.GroupVersion.Group {
-								return false
-							}
-							if instance.Spec.Kubernetes.Metadata.Namespace != testNamespace {
-								return false
-							}
-							if v, ok := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]; !ok || v != "true" {
-								return false
-							}
+							typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
+							Expect(typeOk).Should(BeTrue())
+							Expect(typeString).Should(Equal("RDSInventory.dbaas.redhat.com"))
+							namespacedNameString, nsnOk := instance.GetAnnotations()[ophandler.NamespacedNameAnnotation]
+							Expect(nsnOk).Should(BeTrue())
+							Expect(namespacedNameString).Should(Equal(testNamespace + "/" + inventoryName))
+							Expect(instance.Spec.Kubernetes.GroupKind.Kind).Should(Equal("DBInstance"))
+							Expect(instance.Spec.Kubernetes.GroupKind.Group).Should(Equal(rdsv1alpha1.GroupVersion.Group))
+							Expect(instance.Spec.Kubernetes.Metadata.Namespace).Should(Equal(testNamespace))
+							label, labelOk := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]
+							Expect(labelOk).Should(BeTrue())
+							Expect(label).Should(Equal("true"))
 						}
 						if instance, ok := dbInstancesMap["mock-db-instance-3"]; !ok {
 							return false
@@ -296,23 +337,18 @@ var _ = Describe("RDSInventoryController", func() {
 							if !strings.HasPrefix(instance.Name, "mock-db-instance-3") {
 								return false
 							}
-							if typeString, ok := instance.GetAnnotations()[ophandler.TypeAnnotation]; ok && typeString == "RDSInventory.dbaas.redhat.com" {
-								if namespacedNameString, ok := instance.GetAnnotations()[ophandler.NamespacedNameAnnotation]; !ok || namespacedNameString != (testNamespace+"/"+inventoryName) {
-									return false
-								}
-							}
-							if instance.Spec.Kubernetes.GroupKind.Kind != "DBInstance" {
-								return false
-							}
-							if instance.Spec.Kubernetes.GroupKind.Group != rdsv1alpha1.GroupVersion.Group {
-								return false
-							}
-							if instance.Spec.Kubernetes.Metadata.Namespace != testNamespace {
-								return false
-							}
-							if v, ok := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]; !ok || v != "true" {
-								return false
-							}
+							typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
+							Expect(typeOk).Should(BeTrue())
+							Expect(typeString).Should(Equal("RDSInventory.dbaas.redhat.com"))
+							namespacedNameString, nsnOk := instance.GetAnnotations()[ophandler.NamespacedNameAnnotation]
+							Expect(nsnOk).Should(BeTrue())
+							Expect(namespacedNameString).Should(Equal(testNamespace + "/" + inventoryName))
+							Expect(instance.Spec.Kubernetes.GroupKind.Kind).Should(Equal("DBInstance"))
+							Expect(instance.Spec.Kubernetes.GroupKind.Group).Should(Equal(rdsv1alpha1.GroupVersion.Group))
+							Expect(instance.Spec.Kubernetes.Metadata.Namespace).Should(Equal(testNamespace))
+							label, labelOk := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]
+							Expect(labelOk).Should(BeTrue())
+							Expect(label).Should(Equal("true"))
 						}
 						if instance, ok := dbInstancesMap["mock-db-instance-4"]; !ok {
 							return false
@@ -320,23 +356,18 @@ var _ = Describe("RDSInventoryController", func() {
 							if !strings.HasPrefix(instance.Name, "mock-db-instance-4") {
 								return false
 							}
-							if typeString, ok := instance.GetAnnotations()[ophandler.TypeAnnotation]; ok && typeString == "RDSInventory.dbaas.redhat.com" {
-								if namespacedNameString, ok := instance.GetAnnotations()[ophandler.NamespacedNameAnnotation]; !ok || namespacedNameString != (testNamespace+"/"+inventoryName) {
-									return false
-								}
-							}
-							if instance.Spec.Kubernetes.GroupKind.Kind != "DBInstance" {
-								return false
-							}
-							if instance.Spec.Kubernetes.GroupKind.Group != rdsv1alpha1.GroupVersion.Group {
-								return false
-							}
-							if instance.Spec.Kubernetes.Metadata.Namespace != testNamespace {
-								return false
-							}
-							if v, ok := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]; !ok || v != "true" {
-								return false
-							}
+							typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
+							Expect(typeOk).Should(BeTrue())
+							Expect(typeString).Should(Equal("RDSInventory.dbaas.redhat.com"))
+							namespacedNameString, nsnOk := instance.GetAnnotations()[ophandler.NamespacedNameAnnotation]
+							Expect(nsnOk).Should(BeTrue())
+							Expect(namespacedNameString).Should(Equal(testNamespace + "/" + inventoryName))
+							Expect(instance.Spec.Kubernetes.GroupKind.Kind).Should(Equal("DBInstance"))
+							Expect(instance.Spec.Kubernetes.GroupKind.Group).Should(Equal(rdsv1alpha1.GroupVersion.Group))
+							Expect(instance.Spec.Kubernetes.Metadata.Namespace).Should(Equal(testNamespace))
+							label, labelOk := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]
+							Expect(labelOk).Should(BeTrue())
+							Expect(label).Should(Equal("true"))
 						}
 						if instance, ok := dbInstancesMap["mock-db-instance-5"]; !ok {
 							return false
@@ -344,75 +375,18 @@ var _ = Describe("RDSInventoryController", func() {
 							if !strings.HasPrefix(instance.Name, "mock-db-instance-5") {
 								return false
 							}
-							if typeString, ok := instance.GetAnnotations()[ophandler.TypeAnnotation]; ok && typeString == "RDSInventory.dbaas.redhat.com" {
-								if namespacedNameString, ok := instance.GetAnnotations()[ophandler.NamespacedNameAnnotation]; !ok || namespacedNameString != (testNamespace+"/"+inventoryName) {
-									return false
-								}
-							}
-							if instance.Spec.Kubernetes.GroupKind.Kind != "DBInstance" {
-								return false
-							}
-							if instance.Spec.Kubernetes.GroupKind.Group != rdsv1alpha1.GroupVersion.Group {
-								return false
-							}
-							if instance.Spec.Kubernetes.Metadata.Namespace != testNamespace {
-								return false
-							}
-							if v, ok := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]; !ok || v != "true" {
-								return false
-							}
-						}
-						return true
-					}, timeout).Should(BeTrue())
-
-					By("checking Inventory status")
-					inv := &rdsdbaasv1alpha1.RDSInventory{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      inventoryName,
-							Namespace: testNamespace,
-						},
-					}
-					Eventually(func() bool {
-						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(inv), inv); err != nil {
-							return false
-						}
-						if len(inv.Status.Instances) != 3 {
-							return false
-						}
-						instancesMap := make(map[string]dbaasv1alpha1.Instance, 3)
-						for i := range inv.Status.Instances {
-							ins := inv.Status.Instances[i]
-							instancesMap[ins.InstanceID] = ins
-						}
-						if ins, ok := instancesMap[*dbInstance1.Spec.DBInstanceIdentifier]; !ok {
-							return false
-						} else {
-							if ins.Name != dbInstance1.Name {
-								return false
-							}
-							if s, ok := ins.InstanceInfo["dbInstanceStatus"]; !ok || s != *dbInstance1.Status.DBInstanceStatus {
-								return false
-							}
-						}
-						if ins, ok := instancesMap[*dbInstance2.Spec.DBInstanceIdentifier]; !ok {
-							return false
-						} else {
-							if ins.Name != dbInstance2.Name {
-								return false
-							}
-							if s, ok := ins.InstanceInfo["dbInstanceStatus"]; !ok || s != *dbInstance2.Status.DBInstanceStatus {
-								return false
-							}
-						}
-						if ins, ok := instancesMap[*dbInstance3.Spec.DBInstanceIdentifier]; !ok {
-							return false
-						} else {
-							if ins.Name != dbInstance3.Name {
-								return false
-							}
-							if s, ok := ins.InstanceInfo["dbInstanceStatus"]; !ok || s != *dbInstance3.Status.DBInstanceStatus {
-								return false
-							}
+							typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
+							Expect(typeOk).Should(BeTrue())
+							Expect(typeString).Should(Equal("RDSInventory.dbaas.redhat.com"))
+							namespacedNameString, nsnOk := instance.GetAnnotations()[ophandler.NamespacedNameAnnotation]
+							Expect(nsnOk).Should(BeTrue())
+							Expect(namespacedNameString).Should(Equal(testNamespace + "/" + inventoryName))
+							Expect(instance.Spec.Kubernetes.GroupKind.Kind).Should(Equal("DBInstance"))
+							Expect(instance.Spec.Kubernetes.GroupKind.Group).Should(Equal(rdsv1alpha1.GroupVersion.Group))
+							Expect(instance.Spec.Kubernetes.Metadata.Namespace).Should(Equal(testNamespace))
+							label, labelOk := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]
+							Expect(labelOk).Should(BeTrue())
+							Expect(label).Should(Equal("true"))
 						}
 						return true
 					}, timeout).Should(BeTrue())
@@ -437,22 +411,14 @@ var _ = Describe("RDSInventoryController", func() {
 						if dbInstance.Spec.MasterUserPassword == nil {
 							return false
 						}
-						if dbInstance.Spec.MasterUserPassword.Key != "password" {
-							return false
-						}
-						if dbInstance.Spec.MasterUserPassword.Namespace != testNamespace {
-							return false
-						}
-						if dbInstance.Spec.MasterUserPassword.Name != "db-instance-3-credentials" {
-							return false
-						}
-
-						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret), dbSecret); err != nil {
-							return false
-						}
-						if v, ok := dbSecret.Data["password"]; !ok || len(v) == 0 {
-							return false
-						}
+						Expect(dbInstance.Spec.MasterUserPassword.Key).Should(Equal("password"))
+						Expect(dbInstance.Spec.MasterUserPassword.Namespace).Should(Equal(testNamespace))
+						Expect(dbInstance.Spec.MasterUserPassword.Name).Should(Equal("db-instance-3-credentials"))
+						err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret), dbSecret)
+						Expect(err).ShouldNot(HaveOccurred())
+						v, ok := dbSecret.Data["password"]
+						Expect(ok).Should(BeTrue())
+						Expect(len(v)).Should(BeNumerically(">", 0))
 						return true
 					}, timeout).Should(BeTrue())
 				})
