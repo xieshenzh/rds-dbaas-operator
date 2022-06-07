@@ -5,7 +5,7 @@ plugins:
   manifests.sdk.operatorframework.io/v2: {}
   scorecard.sdk.operatorframework.io/v2: {}
 projectName: rds-dbaas-operator
-repo: github.com/xieshenzh/rds-dbaas-operator
+repo: github.com/RHEcosystemAppEng/rds-dbaas-operator
 resources:
 - api:
     crdVersion: v1
@@ -14,7 +14,7 @@ resources:
   domain: redhat.com
   group: dbaas
   kind: RDSInventory
-  path: github.com/xieshenzh/rds-dbaas-operator/api/v1alpha1
+  path: github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1
   version: v1alpha1
   webhooks:
     validation: true
@@ -26,7 +26,7 @@ resources:
   domain: redhat.com
   group: dbaas
   kind: RDSConnection
-  path: github.com/xieshenzh/rds-dbaas-operator/api/v1alpha1
+  path: github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -35,6 +35,6 @@ resources:
   domain: redhat.com
   group: dbaas
   kind: RDSInstance
-  path: github.com/xieshenzh/rds-dbaas-operator/api/v1alpha1
+  path: github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1
   version: v1alpha1
 version: "3"

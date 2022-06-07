@@ -11,7 +11,7 @@ RDS_VERSION ?= 0.0.24
 
 # QUAY_ORG indicates the organization that docker images will be build for & pushed to
 # CHANGE THIS TO YOUR OWN QUAY USERNAME FOR DEV/TESTING/PUSHING
-ORG ?= xiezhang7
+ORG ?= ecosystem-appeng
 
 # CATALOG_BASE_IMG defines an existing catalog version to build on & add bundles to
 #CATALOG_BASE_IMG ?= quay.io/$(ORG)/rds-dbaas-operator-catalog:v$(VERSION)

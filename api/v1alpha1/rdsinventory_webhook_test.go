@@ -25,7 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
-	"github.com/xieshenzh/rds-dbaas-operator/api/v1alpha1"
+	"github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
 )
 
 var _ = Describe("RDSInventoryWebhook", func() {

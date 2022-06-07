@@ -42,11 +42,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
+	rdsdbaasv1alpha1 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
+	"github.com/RHEcosystemAppEng/rds-dbaas-operator/controllers"
+	controllersrds "github.com/RHEcosystemAppEng/rds-dbaas-operator/controllers/rds"
 	rdsv1alpha1 "github.com/aws-controllers-k8s/rds-controller/apis/v1alpha1"
 	ackv1alpha1 "github.com/aws-controllers-k8s/runtime/apis/core/v1alpha1"
-	rdsdbaasv1alpha1 "github.com/xieshenzh/rds-dbaas-operator/api/v1alpha1"
-	"github.com/xieshenzh/rds-dbaas-operator/controllers"
-	controllersrds "github.com/xieshenzh/rds-dbaas-operator/controllers/rds"
 	//+kubebuilder:scaffold:imports
 )
 

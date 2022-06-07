@@ -1,4 +1,4 @@
-module github.com/xieshenzh/rds-dbaas-operator
+module github.com/RHEcosystemAppEng/rds-dbaas-operator
 
 go 1.17
 

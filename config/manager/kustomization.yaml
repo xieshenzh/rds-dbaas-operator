@@ -12,5 +12,5 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 images:
 - name: controller
-  newName: quay.io/xiezhang7/rds-dbaas-operator
+  newName: quay.io/ecosystem-appeng/rds-dbaas-operator
   newTag: v0.1.0

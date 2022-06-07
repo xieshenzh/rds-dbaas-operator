@@ -22,9 +22,9 @@ import (
 
 	"k8s.io/utils/pointer"
 
+	controllersrds "github.com/RHEcosystemAppEng/rds-dbaas-operator/controllers/rds"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
-	controllersrds "github.com/xieshenzh/rds-dbaas-operator/controllers/rds"
 )
 
 var dbInstances = []*rds.DescribeDBInstancesOutput{
