@@ -18,12 +18,29 @@ package controllers
 
 import (
 	cryptorand "crypto/rand"
-	"k8s.io/utils/pointer"
 	"math/big"
 	"math/rand"
+
+	"k8s.io/utils/pointer"
 )
 
 const (
+	postgres         = "postgres"
+	auroraPostgresql = "aurora-postgresql"
+	mysql            = "mysql"
+	mariadb          = "mariadb"
+	aurora           = "aurora"
+	auroraMysql      = "aurora-mysql"
+	oracleSe2        = "oracle-se2"
+	oracleSe2Cdb     = "oracle-se2-cdb"
+	oracleEe         = "oracle-ee"
+	oracleEeCdb      = "oracle-ee-cdb"
+	customOracleEe   = "custom-oracle-ee"
+	sqlserverEe      = "sqlserver-ee"
+	sqlserverSe      = "sqlserver-se"
+	sqlserverEx      = "sqlserver-ex"
+	sqlserverWeb     = "sqlserver-web"
+
 	digits   = "0123456789"
 	specials = "~=+%^*()[]{}!#$?|"
 	all      = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz" + digits + specials
@@ -39,11 +56,11 @@ func generateUsername(engine string) string {
 
 func generateDBName(engine string) *string {
 	switch engine {
-	case "postgres", "aurora-postgresql":
+	case postgres, auroraPostgresql:
 		return pointer.String("postgres")
-	case "mysql", "mariadb", "aurora", "aurora-mysql":
+	case mysql, mariadb, aurora, auroraMysql:
 		return pointer.String("mydb")
-	case "oracle-se2", "oracle-se2-cdb", "oracle-ee", "oracle-ee-cdb", "custom-oracle-ee":
+	case oracleSe2, oracleSe2Cdb, oracleEe, oracleEeCdb, customOracleEe:
 		return pointer.String("ORCL")
 	default:
 		return nil
@@ -71,15 +88,30 @@ func getRandInt(s int) int64 {
 
 func generateBindingType(engine string) string {
 	switch engine {
-	case "postgres", "aurora-postgresql":
+	case postgres, auroraPostgresql:
 		return "postgresql"
-	case "mysql", "mariadb", "aurora", "aurora-mysql":
+	case mysql, mariadb, aurora, auroraMysql:
 		return "mysql"
-	case "oracle-se2", "oracle-se2-cdb", "oracle-ee", "oracle-ee-cdb", "custom-oracle-ee":
+	case oracleSe2, oracleSe2Cdb, oracleEe, oracleEeCdb, customOracleEe:
 		return "oracle"
-	case "sqlserver-ee", "sqlserver-se", "sqlserver-ex", "sqlserver-web":
+	case sqlserverEe, sqlserverSe, sqlserverEx, sqlserverWeb:
 		return "sqlserver"
 	default:
 		return ""
+	}
+}
+
+func getDefaultDBName(engine string) *string {
+	switch engine {
+	case "postgres", "aurora-postgresql":
+		return pointer.String("postgres")
+	case sqlserverEe, sqlserverSe, sqlserverEx, sqlserverWeb:
+		return pointer.String("master")
+	case oracleSe2, oracleSe2Cdb, oracleEe, oracleEeCdb, customOracleEe:
+		return pointer.String("ORCL")
+	case mysql, mariadb, aurora, auroraMysql:
+		return pointer.String("mysql")
+	default:
+		return nil
 	}
 }

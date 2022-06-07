@@ -362,16 +362,8 @@ func setConfigMap(cm *v1.ConfigMap, dbInstance *rdsv1alpha1.DBInstance) {
 	if dbInstance.Spec.DBName != nil {
 		dataMap["database"] = *dbInstance.Spec.DBName
 	} else {
-		switch *dbInstance.Spec.Engine {
-		case "sqlserver-ee", "sqlserver-se", "sqlserver-ex", "sqlserver-web":
-			dataMap["database"] = "master"
-		case "mysql", "mariadb", "aurora", "aurora-mysql":
-			dataMap["database"] = "mysql"
-		case "postgres", "aurora-postgresql":
-			dataMap["database"] = "postgres"
-		case "oracle-se2", "oracle-se2-cdb", "oracle-ee", "oracle-ee-cdb", "custom-oracle-ee":
-			dataMap["database"] = "ORCL"
-		default:
+		if dbName := getDefaultDBName(*dbInstance.Spec.Engine); dbName != nil {
+			dataMap["database"] = *dbName
 		}
 	}
 
