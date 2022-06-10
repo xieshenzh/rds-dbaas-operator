@@ -342,16 +342,6 @@ func (r *RDSConnectionReconciler) createOrUpdateConfigMap(ctx context.Context, c
 	return cm, nil
 }
 
-func buildConnectionLabels(connection *rdsdbaasv1alpha1.RDSConnection) map[string]string {
-	return map[string]string{
-		"managed-by":               "rds-dbaas-operator",
-		"owner":                    connection.Name,
-		"owner.kind":               connection.Kind,
-		"owner.namespace":          connection.Namespace,
-		dbaasv1alpha1.TypeLabelKey: dbaasv1alpha1.TypeLabelValue,
-	}
-}
-
 func setConfigMap(cm *v1.ConfigMap, dbInstance *rdsv1alpha1.DBInstance) {
 	dataMap := map[string]string{
 		"type":     generateBindingType(*dbInstance.Spec.Engine),
@@ -368,6 +358,16 @@ func setConfigMap(cm *v1.ConfigMap, dbInstance *rdsv1alpha1.DBInstance) {
 	}
 
 	cm.Data = dataMap
+}
+
+func buildConnectionLabels(connection *rdsdbaasv1alpha1.RDSConnection) map[string]string {
+	return map[string]string{
+		"managed-by":               "rds-dbaas-operator",
+		"owner":                    connection.Name,
+		"owner.kind":               connection.Kind,
+		"owner.namespace":          connection.Namespace,
+		dbaasv1alpha1.TypeLabelKey: dbaasv1alpha1.TypeLabelValue,
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.

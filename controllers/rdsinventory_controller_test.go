@@ -92,10 +92,11 @@ var _ = Describe("RDSInventoryController", func() {
 				BeforeEach(assertResourceCreation(dbInstance1))
 				AfterEach(assertResourceDeletion(dbInstance1))
 				BeforeEach(func() {
-					dbInstance1.Status = rdsv1alpha1.DBInstanceStatus{
-						DBInstanceStatus: pointer.String("available"),
-					}
 					Eventually(func() bool {
+						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance1), dbInstance1); err != nil {
+							return false
+						}
+						dbInstance1.Status.DBInstanceStatus = pointer.String("available")
 						err := k8sClient.Status().Update(ctx, dbInstance1)
 						return err == nil
 					}, timeout).Should(BeTrue())
@@ -115,10 +116,11 @@ var _ = Describe("RDSInventoryController", func() {
 				BeforeEach(assertResourceCreation(dbInstance2))
 				AfterEach(assertResourceDeletion(dbInstance2))
 				BeforeEach(func() {
-					dbInstance2.Status = rdsv1alpha1.DBInstanceStatus{
-						DBInstanceStatus: pointer.String("creating"),
-					}
 					Eventually(func() bool {
+						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance2), dbInstance2); err != nil {
+							return false
+						}
+						dbInstance2.Status.DBInstanceStatus = pointer.String("creating")
 						err := k8sClient.Status().Update(ctx, dbInstance2)
 						return err == nil
 					}, timeout).Should(BeTrue())
@@ -141,10 +143,11 @@ var _ = Describe("RDSInventoryController", func() {
 				BeforeEach(assertResourceCreation(dbInstance3))
 				AfterEach(assertResourceDeletion(dbInstance3))
 				BeforeEach(func() {
-					dbInstance3.Status = rdsv1alpha1.DBInstanceStatus{
-						DBInstanceStatus: pointer.String("available"),
-					}
 					Eventually(func() bool {
+						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance3), dbInstance3); err != nil {
+							return false
+						}
+						dbInstance3.Status.DBInstanceStatus = pointer.String("available")
 						err := k8sClient.Status().Update(ctx, dbInstance3)
 						return err == nil
 					}, timeout).Should(BeTrue())
