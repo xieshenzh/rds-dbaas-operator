@@ -170,6 +170,12 @@ var _ = BeforeSuite(func() {
 		},
 	}
 	assertResourceCreation(rdsDeployment)()
+	rdsDeployment.Status = appsv1.DeploymentStatus{
+		Replicas:      1,
+		ReadyReplicas: 1,
+	}
+	err = k8sClient.Status().Update(ctx, rdsDeployment)
+	Expect(err).ToNot(HaveOccurred())
 
 	providerReconciler := &controllers.DBaaSProviderReconciler{
 		Client:    mgr.GetClient(),

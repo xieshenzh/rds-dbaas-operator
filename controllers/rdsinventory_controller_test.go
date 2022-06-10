@@ -75,12 +75,12 @@ var _ = Describe("RDSInventoryController", func() {
 			}
 			BeforeEach(assertResourceCreation(inventory))
 
-			Context("when check the status of the Inventory", func() {
+			Context("when checking the status of the Inventory", func() {
 				AfterEach(assertResourceDeletion(inventory))
 
 				dbInstance1 := &rdsv1alpha1.DBInstance{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "db-instance-1",
+						Name:      "db-instance-inventory-controller-1",
 						Namespace: testNamespace,
 					},
 					Spec: rdsv1alpha1.DBInstanceSpec{
@@ -103,7 +103,7 @@ var _ = Describe("RDSInventoryController", func() {
 
 				dbInstance2 := &rdsv1alpha1.DBInstance{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "db-instance-2",
+						Name:      "db-instance-inventory-controller-2",
 						Namespace: testNamespace,
 					},
 					Spec: rdsv1alpha1.DBInstanceSpec{
@@ -126,7 +126,7 @@ var _ = Describe("RDSInventoryController", func() {
 
 				dbInstance3 := &rdsv1alpha1.DBInstance{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "db-instance-3",
+						Name:      "db-instance-inventory-controller-3",
 						Namespace: testNamespace,
 						Labels: map[string]string{
 							"rds.dbaas.redhat.com/adopted": "true",
@@ -146,39 +146,6 @@ var _ = Describe("RDSInventoryController", func() {
 					}
 					Eventually(func() bool {
 						err := k8sClient.Status().Update(ctx, dbInstance3)
-						return err == nil
-					}, timeout).Should(BeTrue())
-				})
-
-				deployment := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "ack-rds-controller",
-						Namespace: testNamespace,
-					},
-				}
-				BeforeEach(func() {
-					Eventually(func() bool {
-						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
-							return false
-						}
-						deployment.Status = appsv1.DeploymentStatus{
-							Replicas:      1,
-							ReadyReplicas: 1,
-						}
-						err := k8sClient.Status().Update(ctx, deployment)
-						return err == nil
-					}, timeout).Should(BeTrue())
-				})
-				AfterEach(func() {
-					Eventually(func() bool {
-						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
-							return false
-						}
-						deployment.Status = appsv1.DeploymentStatus{
-							Replicas:      0,
-							ReadyReplicas: 0,
-						}
-						err := k8sClient.Status().Update(ctx, deployment)
 						return err == nil
 					}, timeout).Should(BeTrue())
 				})
@@ -222,6 +189,12 @@ var _ = Describe("RDSInventoryController", func() {
 					}, timeout).Should(BeTrue())
 
 					By("checking if the RDS controller is started")
+					deployment := &appsv1.Deployment{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "ack-rds-controller",
+							Namespace: testNamespace,
+						},
+					}
 					Eventually(func() bool {
 						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
 							return false
@@ -394,13 +367,13 @@ var _ = Describe("RDSInventoryController", func() {
 					By("checking if the password of adopted db instance is reset")
 					dbInstance := &rdsv1alpha1.DBInstance{
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      "db-instance-3",
+							Name:      "db-instance-inventory-controller-3",
 							Namespace: testNamespace,
 						},
 					}
 					dbSecret := &v1.Secret{
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      "db-instance-3-credentials",
+							Name:      "db-instance-inventory-controller-3-credentials",
 							Namespace: testNamespace,
 						},
 					}
@@ -413,7 +386,7 @@ var _ = Describe("RDSInventoryController", func() {
 						}
 						Expect(dbInstance.Spec.MasterUserPassword.Key).Should(Equal("password"))
 						Expect(dbInstance.Spec.MasterUserPassword.Namespace).Should(Equal(testNamespace))
-						Expect(dbInstance.Spec.MasterUserPassword.Name).Should(Equal("db-instance-3-credentials"))
+						Expect(dbInstance.Spec.MasterUserPassword.Name).Should(Equal("db-instance-inventory-controller-3-credentials"))
 						err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret), dbSecret)
 						Expect(err).ShouldNot(HaveOccurred())
 						v, ok := dbSecret.Data["password"]
