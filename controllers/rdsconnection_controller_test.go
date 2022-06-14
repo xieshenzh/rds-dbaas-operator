@@ -304,7 +304,7 @@ var _ = Describe("RDSConnectionController", func() {
 											passwordSecret.Data = map[string][]byte{
 												"password": []byte("testpassword"),
 											}
-											err := k8sClient.Update(ctx, dbInstance)
+											err := k8sClient.Update(ctx, passwordSecret)
 											return err == nil
 										}, timeout).Should(BeTrue())
 									})

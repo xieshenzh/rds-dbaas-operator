@@ -139,7 +139,9 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		result = ctrl.Result{}
 		err = e
 		provisionStatus = string(metav1.ConditionFalse)
-		provisionStatusReason = reason
+		if len(reason) > 0 {
+			provisionStatusReason = reason
+		}
 		if len(provisionStatusMessage) > 0 {
 			provisionStatusMessage = fmt.Sprintf("%s: %s", message, provisionStatusMessage)
 		} else {
@@ -217,7 +219,7 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			if controllerutil.ContainsFinalizer(&instance, instanceFinalizer) {
 				phase = instancePhaseDeleting
 				dbInstance := &rdsv1alpha1.DBInstance{}
-				if e := r.Get(ctx, client.ObjectKey{Namespace: inventory.Namespace, Name: instance.Name}, dbInstance); e != nil {
+				if e := r.Get(ctx, client.ObjectKey{Namespace: instance.Spec.InventoryRef.Namespace, Name: instance.Name}, dbInstance); e != nil {
 					if !errors.IsNotFound(e) {
 						logger.Error(e, "Failed to get DB Instance status")
 						returnError(e, instanceStatusReasonBackendError, instanceStatusMessageGetError)
@@ -244,6 +246,7 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 					returnError(e, instanceStatusReasonBackendError, instanceStatusMessageUpdateError)
 					return true
 				}
+				logger.Info("Finalizer removed from Instance")
 				phase = instancePhaseDeleted
 				returnNotReady(instanceStatusReasonUpdating, instanceStatusMessageUpdating)
 				return true
@@ -279,7 +282,7 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			return nil
 		}); e != nil {
 			logger.Error(e, "Failed to create or update DB Instance")
-			returnError(e, instanceStatusReasonBackendError, instanceStatusMessageCreateOrUpdateError)
+			returnError(e, "", instanceStatusMessageCreateOrUpdateError)
 			return true
 		} else if r == controllerutil.OperationResultCreated {
 			phase = instancePhaseCreating
@@ -362,6 +365,10 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	defer updateInstanceReadyCondition()
 
+	if checkFinalizer() {
+		return
+	}
+
 	if e := r.Get(ctx, client.ObjectKey{Namespace: instance.Spec.InventoryRef.Namespace,
 		Name: instance.Spec.InventoryRef.Name}, &inventory); e != nil {
 		if errors.IsNotFound(e) {
@@ -378,10 +385,6 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		condition.Status != metav1.ConditionTrue {
 		logger.Info("RDS Inventory not ready")
 		returnRequeue(instanceStatusReasonUnreachable, instanceStatusMessageInventoryNotReady)
-		return
-	}
-
-	if checkFinalizer() {
 		return
 	}
 
@@ -409,6 +412,12 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 }
 
 func (r *RDSInstanceReconciler) setDBInstanceSpec(ctx context.Context, dbInstance *rdsv1alpha1.DBInstance, rdsInstance *rdsdbaasv1alpha1.RDSInstance) error {
+	if len(rdsInstance.Spec.CloudRegion) > 0 {
+		dbInstance.Spec.AvailabilityZone = pointer.String(rdsInstance.Spec.CloudRegion)
+	} else {
+		return fmt.Errorf(requiredParameterErrorTemplate, "CloudRegion")
+	}
+
 	if engine, ok := rdsInstance.Spec.OtherInstanceParams[engine]; ok {
 		dbInstance.Spec.Engine = pointer.String(engine)
 	} else {
@@ -493,8 +502,6 @@ func (r *RDSInstanceReconciler) setDBInstanceSpec(ctx context.Context, dbInstanc
 
 	dbName := generateDBName(*dbInstance.Spec.Engine)
 	dbInstance.Spec.DBName = dbName
-
-	dbInstance.Spec.AvailabilityZone = pointer.String(rdsInstance.Spec.CloudRegion)
 
 	return nil
 }

@@ -293,6 +293,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 					returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageUpdateError)
 					return true
 				}
+				logger.Info("Finalizer removed from Inventory")
 				returnNotReady(inventoryStatusReasonUpdating, inventoryStatusMessageUpdating)
 				return true
 			}

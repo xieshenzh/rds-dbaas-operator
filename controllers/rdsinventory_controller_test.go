@@ -61,21 +61,20 @@ var _ = Describe("RDSInventoryController", func() {
 		AfterEach(assertResourceDeletion(credential))
 
 		Context("when Inventory is created", func() {
-			inventory := &rdsdbaasv1alpha1.RDSInventory{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      inventoryName,
-					Namespace: testNamespace,
-				},
-				Spec: dbaasv1alpha1.DBaaSInventorySpec{
-					CredentialsRef: &dbaasv1alpha1.NamespacedName{
-						Name:      credentialName,
+			Context("when checking the status of the Inventory", func() {
+				inventory := &rdsdbaasv1alpha1.RDSInventory{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      inventoryName,
 						Namespace: testNamespace,
 					},
-				},
-			}
-			BeforeEach(assertResourceCreation(inventory))
-
-			Context("when checking the status of the Inventory", func() {
+					Spec: dbaasv1alpha1.DBaaSInventorySpec{
+						CredentialsRef: &dbaasv1alpha1.NamespacedName{
+							Name:      credentialName,
+							Namespace: testNamespace,
+						},
+					},
+				}
+				BeforeEach(assertResourceCreation(inventory))
 				AfterEach(assertResourceDeletion(inventory))
 
 				dbInstance1 := &rdsv1alpha1.DBInstance{
@@ -220,7 +219,7 @@ var _ = Describe("RDSInventoryController", func() {
 						if condition == nil || condition.Status != metav1.ConditionTrue || condition.Reason != "SyncOK" {
 							return false
 						}
-						if len(inv.Status.Instances) != 3 {
+						if len(inv.Status.Instances) < 3 {
 							return false
 						}
 						instancesMap := make(map[string]dbaasv1alpha1.Instance, 3)
@@ -261,7 +260,7 @@ var _ = Describe("RDSInventoryController", func() {
 						if err := k8sClient.List(ctx, adoptedDBInstances, client.InNamespace(testNamespace)); err != nil {
 							return false
 						}
-						if len(adoptedDBInstances.Items) != 5 {
+						if len(adoptedDBInstances.Items) < 5 {
 							return false
 						}
 						dbInstancesMap := make(map[string]ackv1alpha1.AdoptedResource, 5)
@@ -394,15 +393,29 @@ var _ = Describe("RDSInventoryController", func() {
 						Expect(err).ShouldNot(HaveOccurred())
 						v, ok := dbSecret.Data["password"]
 						Expect(ok).Should(BeTrue())
-						Expect(len(v)).Should(BeNumerically(">", 0))
+						Expect(len(v)).Should(BeNumerically("==", 12))
 						return true
 					}, timeout).Should(BeTrue())
 				})
 			})
 
 			Context("when the Inventory is deleted", func() {
+				inventoryDelete := &rdsdbaasv1alpha1.RDSInventory{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      inventoryName + "-delete",
+						Namespace: testNamespace,
+					},
+					Spec: dbaasv1alpha1.DBaaSInventorySpec{
+						CredentialsRef: &dbaasv1alpha1.NamespacedName{
+							Name:      credentialName,
+							Namespace: testNamespace,
+						},
+					},
+				}
+				BeforeEach(assertResourceCreation(inventoryDelete))
+
 				It("should delete the owned resources and stop the RDS controller", func() {
-					assertResourceDeletion(inventory)()
+					assertResourceDeletion(inventoryDelete)()
 
 					By("checking if the Secret for RDS controller is deleted")
 					rdsSecret := &v1.Secret{
