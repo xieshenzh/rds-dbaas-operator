@@ -55,7 +55,7 @@ spec:
   - dbaas
   links:
   - name: GitHub
-    url: https://github.com/RHEcosystemAppEng/dbaas-dbaas-operator
+    url: https://github.com/RHEcosystemAppEng/rds-dbaas-operator
   maintainers:
   - email: ecosystem-appeng@redhat.com
     name: Red Hat Ecosystem App Engineering
