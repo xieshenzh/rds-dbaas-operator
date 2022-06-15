@@ -120,7 +120,7 @@ type RDSInventoryReconciler struct {
 //+kubebuilder:rbac:groups=rds.services.k8s.aws,resources=dbinstances/finalizers,verbs=update
 //+kubebuilder:rbac:groups=services.k8s.aws,resources=adoptedresources,verbs=get;list;watch;create;delete;update
 //+kubebuilder:rbac:groups="",resources=secrets;configmaps,verbs=get;list;watch;create;delete;update
-//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch
+//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;update
 //+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch;create;update;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -735,7 +735,7 @@ func (r *RDSInventoryReconciler) startRDSController(ctx context.Context) error {
 	if err := r.Get(ctx, client.ObjectKey{Namespace: r.ACKInstallNamespace, Name: ackDeploymentName}, deployment); err != nil {
 		return err
 	}
-	if deployment.Spec.Replicas != nil && *deployment.Spec.Replicas == 0 {
+	if deployment.Spec.Replicas == nil || *deployment.Spec.Replicas != 1 {
 		deployment.Spec.Replicas = pointer.Int32(1)
 		if err := r.Update(ctx, deployment); err != nil {
 			return err
@@ -806,6 +806,12 @@ func (r *RDSInventoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				return getInstanceInventoryRequests(o, mgr)
 			}),
 		).
+		Watches(
+			&source.Kind{Type: &appsv1.Deployment{}},
+			handler.EnqueueRequestsFromMapFunc(func(o client.Object) []reconcile.Request {
+				return getACKDeploymentInventoryRequests(o, r.ACKInstallNamespace, mgr)
+			}),
+		).
 		Complete(r)
 }
 
@@ -829,6 +835,33 @@ func getInstanceInventoryRequests(object client.Object, mgr ctrl.Manager) []reco
 				Name:      i.Name,
 			},
 		})
+	}
+	return requests
+}
+
+func getACKDeploymentInventoryRequests(object client.Object, namespace string, mgr ctrl.Manager) []reconcile.Request {
+	ctx := context.Background()
+	logger := log.FromContext(ctx)
+	cli := mgr.GetClient()
+
+	deployment := object.(*appsv1.Deployment)
+
+	var requests []reconcile.Request
+	if deployment.Name == ackDeploymentName && deployment.Namespace == namespace {
+		inventoryList := &rdsdbaasv1alpha1.RDSInventoryList{}
+		if e := cli.List(ctx, inventoryList); e != nil {
+			logger.Error(e, "Failed to get Inventories for ACK controller update")
+			return nil
+		}
+
+		for _, i := range inventoryList.Items {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: i.Namespace,
+					Name:      i.Name,
+				},
+			})
+		}
 	}
 	return requests
 }

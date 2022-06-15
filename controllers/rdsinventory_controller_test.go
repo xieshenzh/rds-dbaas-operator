@@ -397,6 +397,45 @@ var _ = Describe("RDSInventoryController", func() {
 						return true
 					}, timeout).Should(BeTrue())
 				})
+
+				Context("when is ACK controller is scaled down", func() {
+					It("should scale the ACK controller up", func() {
+						deployment := &appsv1.Deployment{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "ack-rds-controller",
+								Namespace: testNamespace,
+							},
+						}
+
+						By("checking if the replica is 1 and update it to 0")
+						Eventually(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
+								return false
+							}
+
+							if deployment.Spec.Replicas == nil || *deployment.Spec.Replicas != 1 {
+								return false
+							}
+
+							deployment.Spec.Replicas = pointer.Int32(0)
+							if err := k8sClient.Update(ctx, deployment); err != nil {
+								return false
+							}
+							return true
+						}, timeout).Should(BeTrue())
+
+						By("checking if the replica is updated to 1 again")
+						Eventually(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
+								return false
+							}
+							if deployment.Spec.Replicas == nil || *deployment.Spec.Replicas != 1 {
+								return false
+							}
+							return true
+						}, timeout).Should(BeTrue())
+					})
+				})
 			})
 
 			Context("when the Inventory is deleted", func() {
