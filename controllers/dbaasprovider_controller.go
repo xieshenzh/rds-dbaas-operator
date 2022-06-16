@@ -220,7 +220,7 @@ func bridgeProviderCR(clusterRoleList *rbac.ClusterRoleList) *dbaasoperator.DBaa
 					Required:    false,
 				},
 			},
-			AllowsFreeTrial:              false,
+			AllowsFreeTrial:              true,
 			ExternalProvisionURL:         provisionDocURL,
 			ExternalProvisionDescription: provisionDescription,
 			InstanceParameterSpecs: []dbaasoperator.InstanceParameterSpec{

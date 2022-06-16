@@ -108,7 +108,7 @@ var _ = Describe("DBaaSProviderController", func() {
 				Expect(rdsProvider.Spec.InventoryKind).Should(Equal("RDSInventory"))
 				Expect(rdsProvider.Spec.ConnectionKind).Should(Equal("RDSConnection"))
 				Expect(rdsProvider.Spec.InstanceKind).Should(Equal("RDSInstance"))
-				Expect(rdsProvider.Spec.AllowsFreeTrial).Should(BeFalse())
+				Expect(rdsProvider.Spec.AllowsFreeTrial).Should(BeTrue())
 				Expect(len(rdsProvider.Spec.CredentialFields)).Should(Equal(5))
 				Expect(len(rdsProvider.Spec.InstanceParameterSpecs)).Should(Equal(12))
 
