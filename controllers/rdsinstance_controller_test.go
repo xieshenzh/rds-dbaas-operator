@@ -209,7 +209,7 @@ var _ = Describe("RDSInstanceController", func() {
 								Name:      inventoryName,
 								Namespace: testNamespace,
 							},
-							Name:          instanceName + "-engine",
+							Name:          instanceName + "-identifier",
 							CloudProvider: "AWS",
 							CloudRegion:   "us-east-1a",
 							OtherInstanceParams: map[string]string{
@@ -254,7 +254,7 @@ var _ = Describe("RDSInstanceController", func() {
 								Name:      inventoryName,
 								Namespace: testNamespace,
 							},
-							Name:          instanceName + "-engine",
+							Name:          instanceName + "-class",
 							CloudProvider: "AWS",
 							CloudRegion:   "us-east-1a",
 							OtherInstanceParams: map[string]string{
@@ -267,20 +267,21 @@ var _ = Describe("RDSInstanceController", func() {
 					BeforeEach(assertResourceCreation(instanceClass))
 					AfterEach(assertResourceDeletion(instanceClass))
 
-					It("should make Instance in error status", func() {
-						ins := &rdsdbaasv1alpha1.RDSInstance{
+					It("should use the default instance class", func() {
+						dbInstance := &rdsv1alpha1.DBInstance{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      instanceName + "-class",
 								Namespace: testNamespace,
 							},
 						}
 						Eventually(func() bool {
-							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(ins), ins); err != nil {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance), dbInstance); err != nil {
 								return false
 							}
-							condition := apimeta.FindStatusCondition(ins.Status.Conditions, "ProvisionReady")
-							if condition == nil || condition.Status != metav1.ConditionFalse || condition.Reason != "InputError" ||
-								condition.Message != "Failed to create or update DB Instance: required parameter DBInstanceClass is missing" {
+							if dbInstance.Spec.DBInstanceClass == nil || *dbInstance.Spec.DBInstanceClass != "db.t3.micro" {
+								return false
+							}
+							if dbInstance.Spec.PubliclyAccessible == nil || *dbInstance.Spec.PubliclyAccessible != true {
 								return false
 							}
 							return true
@@ -299,7 +300,7 @@ var _ = Describe("RDSInstanceController", func() {
 								Name:      inventoryName,
 								Namespace: testNamespace,
 							},
-							Name:          instanceName + "-engine",
+							Name:          instanceName + "-storage",
 							CloudProvider: "AWS",
 							CloudRegion:   "us-east-1a",
 							OtherInstanceParams: map[string]string{
@@ -312,20 +313,21 @@ var _ = Describe("RDSInstanceController", func() {
 					BeforeEach(assertResourceCreation(instanceStorage))
 					AfterEach(assertResourceDeletion(instanceStorage))
 
-					It("should make Instance in error status", func() {
-						ins := &rdsdbaasv1alpha1.RDSInstance{
+					It("should use the default storage", func() {
+						dbInstance := &rdsv1alpha1.DBInstance{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      instanceName + "-storage",
 								Namespace: testNamespace,
 							},
 						}
 						Eventually(func() bool {
-							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(ins), ins); err != nil {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance), dbInstance); err != nil {
 								return false
 							}
-							condition := apimeta.FindStatusCondition(ins.Status.Conditions, "ProvisionReady")
-							if condition == nil || condition.Status != metav1.ConditionFalse || condition.Reason != "InputError" ||
-								condition.Message != "Failed to create or update DB Instance: required parameter AllocatedStorage is missing" {
+							if dbInstance.Spec.AllocatedStorage == nil || *dbInstance.Spec.AllocatedStorage != 20 {
+								return false
+							}
+							if dbInstance.Spec.PubliclyAccessible == nil || *dbInstance.Spec.PubliclyAccessible != true {
 								return false
 							}
 							return true
@@ -344,7 +346,7 @@ var _ = Describe("RDSInstanceController", func() {
 								Name:      inventoryName,
 								Namespace: testNamespace,
 							},
-							Name:          instanceName + "-engine",
+							Name:          instanceName + "-region",
 							CloudProvider: "AWS",
 							OtherInstanceParams: map[string]string{
 								"Engine":               "postgres",
@@ -357,20 +359,21 @@ var _ = Describe("RDSInstanceController", func() {
 					BeforeEach(assertResourceCreation(instanceRegion))
 					AfterEach(assertResourceDeletion(instanceRegion))
 
-					It("should make Instance in error status", func() {
-						ins := &rdsdbaasv1alpha1.RDSInstance{
+					It("should use the default region", func() {
+						dbInstance := &rdsv1alpha1.DBInstance{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      instanceName + "-region",
 								Namespace: testNamespace,
 							},
 						}
 						Eventually(func() bool {
-							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(ins), ins); err != nil {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance), dbInstance); err != nil {
 								return false
 							}
-							condition := apimeta.FindStatusCondition(ins.Status.Conditions, "ProvisionReady")
-							if condition == nil || condition.Status != metav1.ConditionFalse || condition.Reason != "InputError" ||
-								condition.Message != "Failed to create or update DB Instance: required parameter CloudRegion is missing" {
+							if dbInstance.Spec.AvailabilityZone == nil || *dbInstance.Spec.AvailabilityZone != "us-east-1a" {
+								return false
+							}
+							if dbInstance.Spec.PubliclyAccessible == nil || *dbInstance.Spec.PubliclyAccessible != true {
 								return false
 							}
 							return true

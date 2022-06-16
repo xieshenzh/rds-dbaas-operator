@@ -64,6 +64,11 @@ const (
 	vpcSecurityGroupIDs  = "VPCSecurityGroupIDs"
 	licenseModel         = "LicenseModel"
 
+	defaultDBInstanceClass    = "db.t3.micro"
+	defaultAllocatedStorage   = 20
+	defaultPubliclyAccessible = true
+	defaultAvailabilityZone   = "us-east-1a"
+
 	instanceConditionReady = "ProvisionReady"
 
 	instanceStatusReasonReady        = "Ready"
@@ -415,7 +420,7 @@ func (r *RDSInstanceReconciler) setDBInstanceSpec(ctx context.Context, dbInstanc
 	if len(rdsInstance.Spec.CloudRegion) > 0 {
 		dbInstance.Spec.AvailabilityZone = pointer.String(rdsInstance.Spec.CloudRegion)
 	} else {
-		return fmt.Errorf(requiredParameterErrorTemplate, "CloudRegion")
+		dbInstance.Spec.AvailabilityZone = pointer.String(defaultAvailabilityZone)
 	}
 
 	if engine, ok := rdsInstance.Spec.OtherInstanceParams[engine]; ok {
@@ -437,7 +442,7 @@ func (r *RDSInstanceReconciler) setDBInstanceSpec(ctx context.Context, dbInstanc
 	if dbInstanceClass, ok := rdsInstance.Spec.OtherInstanceParams[dbInstanceClass]; ok {
 		dbInstance.Spec.DBInstanceClass = pointer.String(dbInstanceClass)
 	} else {
-		return fmt.Errorf(requiredParameterErrorTemplate, "DBInstanceClass")
+		dbInstance.Spec.DBInstanceClass = pointer.String(defaultDBInstanceClass)
 	}
 
 	if storageType, ok := rdsInstance.Spec.OtherInstanceParams[storageType]; ok {
@@ -451,7 +456,7 @@ func (r *RDSInstanceReconciler) setDBInstanceSpec(ctx context.Context, dbInstanc
 			dbInstance.Spec.AllocatedStorage = pointer.Int64(i)
 		}
 	} else {
-		return fmt.Errorf(requiredParameterErrorTemplate, "AllocatedStorage")
+		dbInstance.Spec.AllocatedStorage = pointer.Int64(defaultAllocatedStorage)
 	}
 
 	if iops, ok := rdsInstance.Spec.OtherInstanceParams[iops]; ok {
@@ -480,6 +485,8 @@ func (r *RDSInstanceReconciler) setDBInstanceSpec(ctx context.Context, dbInstanc
 		} else {
 			dbInstance.Spec.PubliclyAccessible = pointer.Bool(b)
 		}
+	} else {
+		dbInstance.Spec.PubliclyAccessible = pointer.Bool(defaultPubliclyAccessible)
 	}
 
 	if vpcSecurityGroupIDs, ok := rdsInstance.Spec.OtherInstanceParams[vpcSecurityGroupIDs]; ok {
