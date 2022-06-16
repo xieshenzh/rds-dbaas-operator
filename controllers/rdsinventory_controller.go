@@ -305,7 +305,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	validateAWSParameter := func() bool {
-		if e := r.Get(ctx, client.ObjectKey{Namespace: inventory.Spec.CredentialsRef.Namespace,
+		if e := r.Get(ctx, client.ObjectKey{Namespace: inventory.Namespace,
 			Name: inventory.Spec.CredentialsRef.Name}, &credentialsRef); e != nil {
 			logger.Error(e, "Failed to get credentials reference for Inventory")
 			if errors.IsNotFound(e) {

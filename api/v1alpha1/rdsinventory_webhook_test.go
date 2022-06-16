@@ -39,8 +39,7 @@ var _ = Describe("RDSInventoryWebhook", func() {
 			},
 			Spec: dbaasv1alpha1.DBaaSInventorySpec{
 				CredentialsRef: &dbaasv1alpha1.NamespacedName{
-					Namespace: testNamespace,
-					Name:      credentialsRefName,
+					Name: credentialsRefName,
 				},
 			},
 		}
@@ -82,8 +81,7 @@ var _ = Describe("RDSInventoryWebhook", func() {
 					},
 					Spec: dbaasv1alpha1.DBaaSInventorySpec{
 						CredentialsRef: &dbaasv1alpha1.NamespacedName{
-							Namespace: testNamespace,
-							Name:      credentialsRefName,
+							Name: credentialsRefName,
 						},
 					},
 				}

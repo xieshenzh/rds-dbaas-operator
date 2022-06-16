@@ -69,8 +69,7 @@ var _ = Describe("RDSInventoryController", func() {
 					},
 					Spec: dbaasv1alpha1.DBaaSInventorySpec{
 						CredentialsRef: &dbaasv1alpha1.NamespacedName{
-							Name:      credentialName,
-							Namespace: testNamespace,
+							Name: credentialName,
 						},
 					},
 				}
@@ -446,8 +445,7 @@ var _ = Describe("RDSInventoryController", func() {
 					},
 					Spec: dbaasv1alpha1.DBaaSInventorySpec{
 						CredentialsRef: &dbaasv1alpha1.NamespacedName{
-							Name:      credentialName,
-							Namespace: testNamespace,
+							Name: credentialName,
 						},
 					},
 				}
