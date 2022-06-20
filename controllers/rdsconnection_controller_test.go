@@ -86,7 +86,7 @@ var _ = Describe("RDSConnectionController", func() {
 					Namespace: testNamespace,
 				},
 				Spec: dbaasv1alpha1.DBaaSInventorySpec{
-					CredentialsRef: &dbaasv1alpha1.NamespacedName{
+					CredentialsRef: &dbaasv1alpha1.LocalObjectReference{
 						Name: credentialName,
 					},
 				},
