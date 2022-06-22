@@ -18,6 +18,7 @@ package controllers_test
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -30,6 +31,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/google/uuid"
 
 	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
 	rdsdbaasv1alpha1 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
@@ -57,18 +60,17 @@ var _ = Describe("RDSInstanceController", func() {
 				CloudProvider: "AWS",
 				CloudRegion:   "us-east-1a",
 				OtherInstanceParams: map[string]string{
-					"Engine":               "postgres",
-					"DBInstanceIdentifier": "rds-instance-instance-controller",
-					"DBInstanceClass":      "db.t3.micro",
-					"AllocatedStorage":     "20",
-					"EngineVersion":        "13.2",
-					"StorageType":          "gp2",
-					"IOPS":                 "1000",
-					"MaxAllocatedStorage":  "50",
-					"DBSubnetGroupName":    "default",
-					"PubliclyAccessible":   "false",
-					"VPCSecurityGroupIDs":  "default",
-					"LicenseModel":         "license-included",
+					"Engine":              "postgres",
+					"DBInstanceClass":     "db.t3.micro",
+					"AllocatedStorage":    "20",
+					"EngineVersion":       "13.2",
+					"StorageType":         "gp2",
+					"IOPS":                "1000",
+					"MaxAllocatedStorage": "50",
+					"DBSubnetGroupName":   "default",
+					"PubliclyAccessible":  "false",
+					"VPCSecurityGroupIDs": "default",
+					"LicenseModel":        "license-included",
 				},
 			},
 		}
@@ -168,9 +170,8 @@ var _ = Describe("RDSInstanceController", func() {
 							CloudProvider: "AWS",
 							CloudRegion:   "us-east-1a",
 							OtherInstanceParams: map[string]string{
-								"DBInstanceIdentifier": "rds-instance-instance-controller",
-								"DBInstanceClass":      "db.t3.micro",
-								"AllocatedStorage":     "20",
+								"DBInstanceClass":  "db.t3.micro",
+								"AllocatedStorage": "20",
 							},
 						},
 					}
@@ -222,20 +223,25 @@ var _ = Describe("RDSInstanceController", func() {
 					BeforeEach(assertResourceCreation(instanceIdentifier))
 					AfterEach(assertResourceDeletion(instanceIdentifier))
 
-					It("should make Instance in error status", func() {
-						ins := &rdsdbaasv1alpha1.RDSInstance{
+					It("should generate DB instance identifier", func() {
+						dbInstance := &rdsv1alpha1.DBInstance{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      instanceName + "-identifier",
 								Namespace: testNamespace,
 							},
 						}
 						Eventually(func() bool {
-							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(ins), ins); err != nil {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance), dbInstance); err != nil {
 								return false
 							}
-							condition := apimeta.FindStatusCondition(ins.Status.Conditions, "ProvisionReady")
-							if condition == nil || condition.Status != metav1.ConditionFalse || condition.Reason != "InputError" ||
-								condition.Message != "Failed to create or update DB Instance: required parameter DBInstanceIdentifier is missing" {
+							if dbInstance.Spec.DBInstanceIdentifier == nil {
+								return false
+							}
+							Expect(strings.HasPrefix(*dbInstance.Spec.DBInstanceIdentifier, "rhoda-database-")).Should(BeTrue())
+							id := strings.TrimPrefix(*dbInstance.Spec.DBInstanceIdentifier, "rhoda-database-")
+							_, err := uuid.Parse(id)
+							Expect(err).ShouldNot(HaveOccurred())
+							if dbInstance.Spec.PubliclyAccessible == nil || *dbInstance.Spec.PubliclyAccessible != true {
 								return false
 							}
 							return true
@@ -258,9 +264,8 @@ var _ = Describe("RDSInstanceController", func() {
 							CloudProvider: "AWS",
 							CloudRegion:   "us-east-1a",
 							OtherInstanceParams: map[string]string{
-								"Engine":               "postgres",
-								"DBInstanceIdentifier": "rds-instance-instance-controller",
-								"AllocatedStorage":     "20",
+								"Engine":           "postgres",
+								"AllocatedStorage": "20",
 							},
 						},
 					}
@@ -304,9 +309,8 @@ var _ = Describe("RDSInstanceController", func() {
 							CloudProvider: "AWS",
 							CloudRegion:   "us-east-1a",
 							OtherInstanceParams: map[string]string{
-								"Engine":               "postgres",
-								"DBInstanceIdentifier": "rds-instance-instance-controller",
-								"DBInstanceClass":      "db.t3.micro",
+								"Engine":          "postgres",
+								"DBInstanceClass": "db.t3.micro",
 							},
 						},
 					}
@@ -398,7 +402,10 @@ var _ = Describe("RDSInstanceController", func() {
 								Expect(dbInstance.Spec.Engine).ShouldNot(BeNil())
 								Expect(*dbInstance.Spec.Engine).Should(Equal("postgres"))
 								Expect(dbInstance.Spec.DBInstanceIdentifier).ShouldNot(BeNil())
-								Expect(*dbInstance.Spec.DBInstanceIdentifier).Should(Equal("rds-instance-instance-controller"))
+								Expect(strings.HasPrefix(*dbInstance.Spec.DBInstanceIdentifier, "rhoda-database-")).Should(BeTrue())
+								id := strings.TrimPrefix(*dbInstance.Spec.DBInstanceIdentifier, "rhoda-database-")
+								_, err := uuid.Parse(id)
+								Expect(err).ShouldNot(HaveOccurred())
 								Expect(dbInstance.Spec.DBInstanceClass).ShouldNot(BeNil())
 								Expect(*dbInstance.Spec.DBInstanceClass).Should(Equal("db.t3.micro"))
 								Expect(dbInstance.Spec.AllocatedStorage).ShouldNot(BeNil())
@@ -776,7 +783,10 @@ var _ = Describe("RDSInstanceController", func() {
 									Expect(condition4.Reason).Should(Equal("DBInstance"))
 									Expect(condition4.Message).Should(Equal("Reason: test##reason&&"))
 
-									Expect(ins.Status.InstanceID).Should(Equal("rds-instance-instance-controller"))
+									Expect(strings.HasPrefix(ins.Status.InstanceID, "rhoda-database-")).Should(BeTrue())
+									id := strings.TrimPrefix(ins.Status.InstanceID, "rhoda-database-")
+									_, err := uuid.Parse(id)
+									Expect(err).ShouldNot(HaveOccurred())
 
 									if ins.Status.InstanceInfo == nil || len(ins.Status.InstanceInfo) == 0 {
 										return false

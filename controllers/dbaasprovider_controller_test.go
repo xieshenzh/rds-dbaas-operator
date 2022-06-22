@@ -110,7 +110,7 @@ var _ = Describe("DBaaSProviderController", func() {
 				Expect(rdsProvider.Spec.InstanceKind).Should(Equal("RDSInstance"))
 				Expect(rdsProvider.Spec.AllowsFreeTrial).Should(BeTrue())
 				Expect(len(rdsProvider.Spec.CredentialFields)).Should(Equal(5))
-				Expect(len(rdsProvider.Spec.InstanceParameterSpecs)).Should(Equal(12))
+				Expect(len(rdsProvider.Spec.InstanceParameterSpecs)).Should(Equal(11))
 
 				assertResourceDeletion(rdsProvider)()
 			})

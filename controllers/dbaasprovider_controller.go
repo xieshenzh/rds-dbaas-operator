@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	v1 "k8s.io/api/apps/v1"
@@ -237,16 +238,11 @@ func bridgeProviderCR(clusterRoleList *rbac.ClusterRoleList) *dbaasoperator.DBaa
 					Required:    false,
 				},
 				{
-					Name:        dbInstanceIdentifier,
-					DisplayName: "DB instance identifier",
-					Type:        "string",
-					Required:    true,
-				},
-				{
-					Name:        dbInstanceClass,
-					DisplayName: "DB instance class",
-					Type:        "string",
-					Required:    true,
+					Name:         dbInstanceClass,
+					DisplayName:  "DB instance class",
+					Type:         "string",
+					Required:     true,
+					DefaultValue: defaultDBInstanceClass,
 				},
 				{
 					Name:         storageType,
@@ -260,7 +256,7 @@ func bridgeProviderCR(clusterRoleList *rbac.ClusterRoleList) *dbaasoperator.DBaa
 					DisplayName:  "Allocated storage",
 					Type:         "int",
 					Required:     true,
-					DefaultValue: "20",
+					DefaultValue: strconv.Itoa(defaultAllocatedStorage),
 				},
 				{
 					Name:        iops,
@@ -281,10 +277,11 @@ func bridgeProviderCR(clusterRoleList *rbac.ClusterRoleList) *dbaasoperator.DBaa
 					Required:    false,
 				},
 				{
-					Name:        publiclyAccessible,
-					DisplayName: "Public access",
-					Type:        "bool",
-					Required:    false,
+					Name:         publiclyAccessible,
+					DisplayName:  "Public access",
+					Type:         "bool",
+					Required:     false,
+					DefaultValue: strconv.FormatBool(defaultPubliclyAccessible),
 				},
 				{
 					Name:        vpcSecurityGroupIDs,

@@ -29,6 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -51,18 +52,17 @@ const (
 
 	instanceFinalizer = "rds.dbaas.redhat.com/instance"
 
-	engine               = "Engine"
-	engineVersion        = "EngineVersion"
-	dbInstanceIdentifier = "DBInstanceIdentifier"
-	dbInstanceClass      = "DBInstanceClass"
-	storageType          = "StorageType"
-	allocatedStorage     = "AllocatedStorage"
-	iops                 = "IOPS"
-	maxAllocatedStorage  = "MaxAllocatedStorage"
-	dbSubnetGroupName    = "DBSubnetGroupName"
-	publiclyAccessible   = "PubliclyAccessible"
-	vpcSecurityGroupIDs  = "VPCSecurityGroupIDs"
-	licenseModel         = "LicenseModel"
+	engine              = "Engine"
+	engineVersion       = "EngineVersion"
+	dbInstanceClass     = "DBInstanceClass"
+	storageType         = "StorageType"
+	allocatedStorage    = "AllocatedStorage"
+	iops                = "IOPS"
+	maxAllocatedStorage = "MaxAllocatedStorage"
+	dbSubnetGroupName   = "DBSubnetGroupName"
+	publiclyAccessible  = "PubliclyAccessible"
+	vpcSecurityGroupIDs = "VPCSecurityGroupIDs"
+	licenseModel        = "LicenseModel"
 
 	defaultDBInstanceClass    = "db.t3.micro"
 	defaultAllocatedStorage   = 20
@@ -417,6 +417,10 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 }
 
 func (r *RDSInstanceReconciler) setDBInstanceSpec(ctx context.Context, dbInstance *rdsv1alpha1.DBInstance, rdsInstance *rdsdbaasv1alpha1.RDSInstance) error {
+	if dbInstance.Spec.DBInstanceIdentifier == nil {
+		dbInstance.Spec.DBInstanceIdentifier = pointer.String(fmt.Sprintf("rhoda-database-%s", string(uuid.NewUUID())))
+	}
+
 	if len(rdsInstance.Spec.CloudRegion) > 0 {
 		dbInstance.Spec.AvailabilityZone = pointer.String(rdsInstance.Spec.CloudRegion)
 	} else {
@@ -431,12 +435,6 @@ func (r *RDSInstanceReconciler) setDBInstanceSpec(ctx context.Context, dbInstanc
 
 	if engineVersion, ok := rdsInstance.Spec.OtherInstanceParams[engineVersion]; ok {
 		dbInstance.Spec.EngineVersion = pointer.String(engineVersion)
-	}
-
-	if dbInstanceId, ok := rdsInstance.Spec.OtherInstanceParams[dbInstanceIdentifier]; ok {
-		dbInstance.Spec.DBInstanceIdentifier = pointer.String(dbInstanceId)
-	} else {
-		return fmt.Errorf(requiredParameterErrorTemplate, "DBInstanceIdentifier")
 	}
 
 	if dbInstanceClass, ok := rdsInstance.Spec.OtherInstanceParams[dbInstanceClass]; ok {
