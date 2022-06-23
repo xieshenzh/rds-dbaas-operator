@@ -351,9 +351,24 @@ func setConfigMap(cm *v1.ConfigMap, dbInstance *rdsv1alpha1.DBInstance) {
 	}
 	if dbInstance.Spec.DBName != nil {
 		dataMap["database"] = *dbInstance.Spec.DBName
-	} else {
+	} else if dbInstance.Spec.Engine != nil {
 		if dbName := getDefaultDBName(*dbInstance.Spec.Engine); dbName != nil {
 			dataMap["database"] = *dbName
+		}
+	}
+
+	if dbInstance.Spec.Engine != nil {
+		switch *dbInstance.Spec.Engine {
+		case oracleSe2, oracleSe2Cdb, oracleEe, oracleEeCdb, customOracleEe:
+			host := dataMap["host"]
+			port := dataMap["port"]
+			db, dbOk := dataMap["database"]
+			if dbOk {
+				dataMap["jdbc-url"] = fmt.Sprintf("jdbc:oracle:thin:@%s:%s/%s", host, port, db)
+			} else {
+				dataMap["jdbc-url"] = fmt.Sprintf("jdbc:oracle:thin:@%s:%s", host, port)
+			}
+		default:
 		}
 	}
 
