@@ -298,7 +298,8 @@ func (r *RDSConnectionReconciler) createOrUpdateSecret(ctx context.Context, conn
 		},
 	}
 	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, secret, func() error {
-		secret.ObjectMeta.Labels = buildConnectionLabels(connection)
+		secret.ObjectMeta.Labels = buildConnectionLabels()
+		secret.ObjectMeta.Annotations = buildConnectionAnnotations(connection, &secret.ObjectMeta)
 		if err := ctrl.SetControllerReference(connection, secret, r.Scheme); err != nil {
 			return err
 		}
@@ -329,7 +330,8 @@ func (r *RDSConnectionReconciler) createOrUpdateConfigMap(ctx context.Context, c
 		},
 	}
 	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, cm, func() error {
-		cm.ObjectMeta.Labels = buildConnectionLabels(connection)
+		cm.ObjectMeta.Labels = buildConnectionLabels()
+		cm.ObjectMeta.Annotations = buildConnectionAnnotations(connection, &cm.ObjectMeta)
 		if err := ctrl.SetControllerReference(connection, cm, r.Scheme); err != nil {
 			return err
 		}
@@ -375,14 +377,24 @@ func setConfigMap(cm *v1.ConfigMap, dbInstance *rdsv1alpha1.DBInstance) {
 	cm.Data = dataMap
 }
 
-func buildConnectionLabels(connection *rdsdbaasv1alpha1.RDSConnection) map[string]string {
+func buildConnectionLabels() map[string]string {
 	return map[string]string{
-		"managed-by":               "rds-dbaas-operator",
-		"owner":                    connection.Name,
-		"owner.kind":               connection.Kind,
-		"owner.namespace":          connection.Namespace,
 		dbaasv1alpha1.TypeLabelKey: dbaasv1alpha1.TypeLabelValue,
 	}
+}
+
+func buildConnectionAnnotations(connection *rdsdbaasv1alpha1.RDSConnection, obj *metav1.ObjectMeta) map[string]string {
+	annotations := map[string]string{}
+	if obj.Annotations != nil {
+		for key, value := range obj.Annotations {
+			annotations[key] = value
+		}
+	}
+	annotations["managed-by"] = "rds-dbaas-operator"
+	annotations["owner"] = connection.Name
+	annotations["owner.kind"] = connection.Kind
+	annotations["owner.namespace"] = connection.Namespace
+	return annotations
 }
 
 // SetupWithManager sets up the controller with the Manager.

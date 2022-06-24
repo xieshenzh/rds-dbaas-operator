@@ -594,7 +594,8 @@ func (r *RDSInventoryReconciler) createOrUpdateSecret(ctx context.Context, inven
 		},
 	}
 	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, secret, func() error {
-		secret.ObjectMeta.Labels = buildInventoryLabels(inventory)
+		secret.ObjectMeta.Labels = buildInventoryLabels()
+		secret.ObjectMeta.Annotations = buildInventoryAnnotations(inventory, &secret.ObjectMeta)
 		if e := ophandler.SetOwnerAnnotations(inventory, secret); e != nil {
 			return e
 		}
@@ -619,7 +620,8 @@ func (r *RDSInventoryReconciler) createOrUpdateConfigMap(ctx context.Context, in
 		},
 	}
 	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, cm, func() error {
-		cm.ObjectMeta.Labels = buildInventoryLabels(inventory)
+		cm.ObjectMeta.Labels = buildInventoryLabels()
+		cm.ObjectMeta.Annotations = buildInventoryAnnotations(inventory, &cm.ObjectMeta)
 		if e := ophandler.SetOwnerAnnotations(inventory, cm); e != nil {
 			return e
 		}
@@ -645,14 +647,24 @@ func (r *RDSInventoryReconciler) createOrUpdateConfigMap(ctx context.Context, in
 	return nil
 }
 
-func buildInventoryLabels(inventory *rdsdbaasv1alpha1.RDSInventory) map[string]string {
+func buildInventoryLabels() map[string]string {
 	return map[string]string{
-		"managed-by":               "rds-dbaas-operator",
-		"owner":                    inventory.Name,
-		"owner.kind":               inventory.Kind,
-		"owner.namespace":          inventory.Namespace,
 		dbaasv1alpha1.TypeLabelKey: dbaasv1alpha1.TypeLabelValue,
 	}
+}
+
+func buildInventoryAnnotations(inventory *rdsdbaasv1alpha1.RDSInventory, obj *metav1.ObjectMeta) map[string]string {
+	annotations := map[string]string{}
+	if obj.Annotations != nil {
+		for key, value := range obj.Annotations {
+			annotations[key] = value
+		}
+	}
+	annotations["managed-by"] = "rds-dbaas-operator"
+	annotations["owner"] = inventory.Name
+	annotations["owner.kind"] = inventory.Kind
+	annotations["owner.namespace"] = inventory.Namespace
+	return annotations
 }
 
 func (r *RDSInventoryReconciler) installCRD(ctx context.Context, cli client.Client, file string) error {
@@ -749,7 +761,7 @@ func createAdoptedResource(dbInstance *rdstypesv2.DBInstance, inventory *rdsdbaa
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:    inventory.Namespace,
 			GenerateName: fmt.Sprintf("%s-", *dbInstance.DBInstanceIdentifier),
-			Labels: map[string]string{
+			Annotations: map[string]string{
 				"managed-by":      "rds-dbaas-operator",
 				"owner":           inventory.Name,
 				"owner.kind":      inventory.Kind,

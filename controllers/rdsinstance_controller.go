@@ -521,7 +521,10 @@ func setCredentials(ctx context.Context, cli client.Client, scheme *runtime.Sche
 		if errors.IsNotFound(e) {
 			secret.Name = secretName
 			secret.Namespace = namespace
-			secret.ObjectMeta.Labels = createSecretLabels(owner, kind)
+			secret.ObjectMeta.Labels = createSecretLabels()
+			if annotations := createSecretAnnotations(owner, kind); annotations != nil {
+				secret.ObjectMeta.Annotations = annotations
+			}
 			if owner != nil {
 				if e := ctrl.SetControllerReference(owner, secret, scheme); e != nil {
 					logger.Error(e, "Failed to set owner reference for credential Secret")
@@ -567,20 +570,22 @@ func setCredentials(ctx context.Context, cli client.Client, scheme *runtime.Sche
 	return secret, nil
 }
 
-func createSecretLabels(owner metav1.Object, kind string) map[string]string {
+func createSecretLabels() map[string]string {
+	return map[string]string{
+		dbaasv1alpha1.TypeLabelKey: dbaasv1alpha1.TypeLabelValue,
+	}
+}
+
+func createSecretAnnotations(owner metav1.Object, kind string) map[string]string {
 	if owner != nil {
 		return map[string]string{
-			"managed-by":               "rds-dbaas-operator",
-			"owner":                    owner.GetName(),
-			"owner.kind":               kind,
-			"owner.namespace":          owner.GetNamespace(),
-			dbaasv1alpha1.TypeLabelKey: dbaasv1alpha1.TypeLabelValue,
-		}
-	} else {
-		return map[string]string{
-			dbaasv1alpha1.TypeLabelKey: dbaasv1alpha1.TypeLabelValue,
+			"managed-by":      "rds-dbaas-operator",
+			"owner":           owner.GetName(),
+			"owner.kind":      kind,
+			"owner.namespace": owner.GetNamespace(),
 		}
 	}
+	return nil
 }
 
 func setDBInstancePhase(dbInstance *rdsv1alpha1.DBInstance, rdsInstance *rdsdbaasv1alpha1.RDSInstance) {
