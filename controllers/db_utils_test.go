@@ -50,6 +50,9 @@ var _ = Describe("DbUtils", func() {
 			Entry("sqlserver-se", "sqlserver-se", "admin"),
 			Entry("sqlserver-ex", "sqlserver-ex", "admin"),
 			Entry("sqlserver-web", "sqlserver-web", "admin"),
+			Entry("custom-sqlserver-ee", "custom-sqlserver-ee", "admin"),
+			Entry("custom-sqlserver-se", "custom-sqlserver-se", "admin"),
+			Entry("custom-sqlserver-web", "custom-sqlserver-web", "admin"),
 		)
 	})
 
@@ -79,6 +82,9 @@ var _ = Describe("DbUtils", func() {
 			Entry("sqlserver-se", "sqlserver-se", nil),
 			Entry("sqlserver-ex", "sqlserver-ex", nil),
 			Entry("sqlserver-web", "sqlserver-web", nil),
+			Entry("custom-sqlserver-ee", "custom-sqlserver-ee", nil),
+			Entry("custom-sqlserver-se", "custom-sqlserver-se", nil),
+			Entry("custom-sqlserver-web", "custom-sqlserver-web", nil),
 			Entry("Invalid", "invalid", nil),
 		)
 	})
@@ -105,6 +111,9 @@ var _ = Describe("DbUtils", func() {
 			Entry("sqlserver-se", "sqlserver-se", "sqlserver"),
 			Entry("sqlserver-ex", "sqlserver-ex", "sqlserver"),
 			Entry("sqlserver-web", "sqlserver-web", "sqlserver"),
+			Entry("custom-sqlserver-ee", "custom-sqlserver-ee", "sqlserver"),
+			Entry("custom-sqlserver-se", "custom-sqlserver-se", "sqlserver"),
+			Entry("custom-sqlserver-web", "custom-sqlserver-web", "sqlserver"),
 		)
 	})
 
@@ -134,6 +143,9 @@ var _ = Describe("DbUtils", func() {
 			Entry("sqlserver-se", "sqlserver-se", pointer.String("master")),
 			Entry("sqlserver-ex", "sqlserver-ex", pointer.String("master")),
 			Entry("sqlserver-web", "sqlserver-web", pointer.String("master")),
+			Entry("custom-sqlserver-ee", "custom-sqlserver-ee", pointer.String("master")),
+			Entry("custom-sqlserver-se", "custom-sqlserver-se", pointer.String("master")),
+			Entry("custom-sqlserver-web", "custom-sqlserver-web", pointer.String("master")),
 			Entry("Invalid", "invalid", nil),
 		)
 	})

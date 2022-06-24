@@ -885,9 +885,6 @@ func parseDBInstanceStatus(dbInstance *rdsv1alpha1.DBInstance) map[string]string
 			instanceStatus["pendingModifiedValues.storageType"] = *dbInstance.Status.PendingModifiedValues.StorageType
 		}
 	}
-	if dbInstance.Status.PerformanceInsightsEnabled != nil {
-		instanceStatus["performanceInsightsEnabled"] = strconv.FormatBool(*dbInstance.Status.PerformanceInsightsEnabled)
-	}
 	if dbInstance.Status.ReadReplicaDBClusterIdentifiers != nil {
 		for i, id := range dbInstance.Status.ReadReplicaDBClusterIdentifiers {
 			if id != nil {
@@ -904,9 +901,6 @@ func parseDBInstanceStatus(dbInstance *rdsv1alpha1.DBInstance) map[string]string
 	}
 	if dbInstance.Status.ReadReplicaSourceDBInstanceIdentifier != nil {
 		instanceStatus["readReplicaSourceDBInstanceIdentifier"] = *dbInstance.Status.ReadReplicaSourceDBInstanceIdentifier
-	}
-	if dbInstance.Status.ReplicaMode != nil {
-		instanceStatus["replicaMode"] = *dbInstance.Status.ReplicaMode
 	}
 	if dbInstance.Status.ResumeFullAutomationModeTime != nil {
 		instanceStatus["resumeFullAutomationModeTime"] = dbInstance.Status.ResumeFullAutomationModeTime.String()

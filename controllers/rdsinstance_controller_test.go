@@ -695,7 +695,6 @@ var _ = Describe("RDSInstanceController", func() {
 										ResumeFullAutomationModeTime: &tm,
 										StorageType:                  pointer.String("test-type"),
 									}
-									dbInstance.Status.PerformanceInsightsEnabled = pointer.Bool(false)
 									dbInstance.Status.ReadReplicaDBClusterIdentifiers = []*string{
 										pointer.String("test-identifier"),
 									}
@@ -703,7 +702,6 @@ var _ = Describe("RDSInstanceController", func() {
 										pointer.String("test-identifier"),
 									}
 									dbInstance.Status.ReadReplicaSourceDBInstanceIdentifier = pointer.String("test-identifier")
-									dbInstance.Status.ReplicaMode = pointer.String("test-mode")
 									dbInstance.Status.ResumeFullAutomationModeTime = &tm
 									dbInstance.Status.SecondaryAvailabilityZone = pointer.String("test-zone")
 									dbInstance.Status.StatusInfos = []*rdsv1alpha1.DBInstanceStatusInfo{
@@ -862,7 +860,6 @@ var _ = Describe("RDSInstanceController", func() {
 										"readReplicaDBClusterIdentifiers[0]":                                      "test-identifier",
 										"readReplicaDBInstanceIdentifiers[0]":                                     "test-identifier",
 										"readReplicaSourceDBInstanceIdentifier":                                   "test-identifier",
-										"replicaMode":                                                             "test-mode",
 										"resumeFullAutomationModeTime":                                            dbInstance.Status.ResumeFullAutomationModeTime.String(),
 										"secondaryAvailabilityZone":                                               "test-zone",
 										"statusInfos[0].message":                                                  "test-message",

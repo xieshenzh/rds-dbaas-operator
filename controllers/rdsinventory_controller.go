@@ -67,8 +67,8 @@ const (
 	ackWatchNamespace           = "ACK_WATCH_NAMESPACE"
 	awsEndpointUrl              = "AWS_ENDPOINT_URL"
 
-	secretName    = "ack-user-secrets"
-	configmapName = "ack-user-config"
+	secretName    = "ack-rds-user-secrets" //#nosec G101
+	configmapName = "ack-rds-user-config"
 
 	adoptedResourceCRDFile = "services.k8s.aws_adoptedresources.yaml"
 	fieldExportCRDFile     = "services.k8s.aws_fieldexports.yaml"

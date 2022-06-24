@@ -155,7 +155,7 @@ var _ = Describe("RDSInventoryController", func() {
 					By("checking if the Secret for RDS controller is created")
 					rdsSecret := &v1.Secret{
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      "ack-user-secrets",
+							Name:      "ack-rds-user-secrets",
 							Namespace: testNamespace,
 						},
 					}
@@ -175,7 +175,7 @@ var _ = Describe("RDSInventoryController", func() {
 					By("checking if the ConfigMap for RDS controller is created")
 					rdsConfigMap := &v1.ConfigMap{
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      "ack-user-config",
+							Name:      "ack-rds-user-config",
 							Namespace: testNamespace,
 						},
 					}
@@ -457,7 +457,7 @@ var _ = Describe("RDSInventoryController", func() {
 					By("checking if the Secret for RDS controller is deleted")
 					rdsSecret := &v1.Secret{
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      "ack-user-secrets",
+							Name:      "ack-rds-user-secrets",
 							Namespace: testNamespace,
 						},
 					}
@@ -473,7 +473,7 @@ var _ = Describe("RDSInventoryController", func() {
 					By("checking if the ConfigMap for RDS controller is deleted")
 					rdsConfigMap := &v1.ConfigMap{
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      "ack-user-config",
+							Name:      "ack-rds-user-config",
 							Namespace: testNamespace,
 						},
 					}

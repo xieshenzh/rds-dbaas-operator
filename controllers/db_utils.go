@@ -25,21 +25,24 @@ import (
 )
 
 const (
-	postgres         = "postgres"
-	auroraPostgresql = "aurora-postgresql"
-	mysql            = "mysql"
-	mariadb          = "mariadb"
-	aurora           = "aurora"
-	auroraMysql      = "aurora-mysql"
-	oracleSe2        = "oracle-se2"
-	oracleSe2Cdb     = "oracle-se2-cdb"
-	oracleEe         = "oracle-ee"
-	oracleEeCdb      = "oracle-ee-cdb"
-	customOracleEe   = "custom-oracle-ee"
-	sqlserverEe      = "sqlserver-ee"
-	sqlserverSe      = "sqlserver-se"
-	sqlserverEx      = "sqlserver-ex"
-	sqlserverWeb     = "sqlserver-web"
+	postgres           = "postgres"
+	auroraPostgresql   = "aurora-postgresql"
+	mysql              = "mysql"
+	mariadb            = "mariadb"
+	aurora             = "aurora"
+	auroraMysql        = "aurora-mysql"
+	oracleSe2          = "oracle-se2"
+	oracleSe2Cdb       = "oracle-se2-cdb"
+	oracleEe           = "oracle-ee"
+	oracleEeCdb        = "oracle-ee-cdb"
+	customOracleEe     = "custom-oracle-ee"
+	sqlserverEe        = "sqlserver-ee"
+	sqlserverSe        = "sqlserver-se"
+	sqlserverEx        = "sqlserver-ex"
+	sqlserverWeb       = "sqlserver-web"
+	customSqlserverEe  = "custom-sqlserver-ee"
+	customSqlserverSe  = "custom-sqlserver-se"
+	customSqlserverWeb = "custom-sqlserver-web"
 
 	digits   = "0123456789"
 	specials = "~=+%^*()[]{}!#$?|"
@@ -76,7 +79,7 @@ func generateBindingType(engine string) string {
 		return "mysql"
 	case oracleSe2, oracleSe2Cdb, oracleEe, oracleEeCdb, customOracleEe:
 		return "oracle"
-	case sqlserverEe, sqlserverSe, sqlserverEx, sqlserverWeb:
+	case sqlserverEe, sqlserverSe, sqlserverEx, sqlserverWeb, customSqlserverEe, customSqlserverSe, customSqlserverWeb:
 		return "sqlserver"
 	default:
 		return ""
@@ -87,7 +90,7 @@ func getDefaultDBName(engine string) *string {
 	switch engine {
 	case "postgres", "aurora-postgresql":
 		return pointer.String("postgres")
-	case sqlserverEe, sqlserverSe, sqlserverEx, sqlserverWeb:
+	case sqlserverEe, sqlserverSe, sqlserverEx, sqlserverWeb, customSqlserverEe, customSqlserverSe, customSqlserverWeb:
 		return pointer.String("master")
 	case oracleSe2, oracleSe2Cdb, oracleEe, oracleEeCdb, customOracleEe:
 		return pointer.String("ORCL")
