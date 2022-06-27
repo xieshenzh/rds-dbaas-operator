@@ -73,3 +73,25 @@ func NewModifyDBInstance(accessKey, secretKey, region string) ModifyDBInstanceAP
 func (m *sdkV2ModifyDBInstance) ModifyDBInstance(ctx context.Context, params *rds.ModifyDBInstanceInput, optFns ...func(*rds.Options)) (*rds.ModifyDBInstanceOutput, error) {
 	return m.client.ModifyDBInstance(ctx, params, optFns...)
 }
+
+type DescribeDBInstancesAPI interface {
+	DescribeDBInstances(context.Context, *rds.DescribeDBInstancesInput, ...func(*rds.Options)) (*rds.DescribeDBInstancesOutput, error)
+}
+
+type sdkV2DescribeDBInstances struct {
+	client *rds.Client
+}
+
+func NewDescribeDBInstances(accessKey, secretKey, region string) DescribeDBInstancesAPI {
+	awsClient := rds.New(rds.Options{
+		Region:      region,
+		Credentials: aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
+	})
+	return &sdkV2DescribeDBInstances{
+		client: awsClient,
+	}
+}
+
+func (d *sdkV2DescribeDBInstances) DescribeDBInstances(ctx context.Context, params *rds.DescribeDBInstancesInput, optFns ...func(*rds.Options)) (*rds.DescribeDBInstancesOutput, error) {
+	return d.client.DescribeDBInstances(ctx, params, optFns...)
+}

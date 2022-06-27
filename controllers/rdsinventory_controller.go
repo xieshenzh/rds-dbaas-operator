@@ -96,6 +96,7 @@ const (
 	inventoryStatusMessageGetError            = "Failed to get %s"
 	inventoryStatusMessageDeleteError         = "Failed to delete %s"
 	inventoryStatusMessageCreateOrUpdateError = "Failed to create or update %s"
+	inventoryStatusMessageCredentialsError    = "The AWS service account is not valid for accessing RDS DB instances"
 	inventoryStatusMessageInstallError        = "Failed to install %s for RDS controller"
 	inventoryStatusMessageVerifyInstallError  = "Failed to verify %s ready for RDS controller"
 	inventoryStatusMessageUninstallError      = "Failed to uninstall RDS controller"
@@ -109,6 +110,7 @@ type RDSInventoryReconciler struct {
 	Scheme                             *runtime.Scheme
 	GetDescribeDBInstancesPaginatorAPI func(accessKey, secretKey, region string) controllersrds.DescribeDBInstancesPaginatorAPI
 	GetModifyDBInstanceAPI             func(accessKey, secretKey, region string) controllersrds.ModifyDBInstanceAPI
+	GetDescribeDBInstancesAPI          func(accessKey, secretKey, region string) controllersrds.DescribeDBInstancesAPI
 	ACKInstallNamespace                string
 	RDSCRDFilePath                     string
 }
@@ -172,6 +174,13 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	returnReady := func() {
 		result = ctrl.Result{}
+		err = nil
+		syncStatus = string(metav1.ConditionTrue)
+		syncStatusReason = inventoryStatusReasonSyncOK
+	}
+
+	returnReadyRequeue := func() {
+		result = ctrl.Result{Requeue: true}
 		err = nil
 		syncStatus = string(metav1.ConditionTrue)
 		syncStatusReason = inventoryStatusReasonSyncOK
@@ -336,6 +345,17 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		} else {
 			region = string(r)
 		}
+
+		describeDBInstances := r.GetDescribeDBInstancesAPI(accessKey, secretKey, region)
+		input := &rds.DescribeDBInstancesInput{
+			MaxRecords: pointer.Int32(20),
+		}
+		if _, e := describeDBInstances.DescribeDBInstances(ctx, input); e != nil {
+			logger.Error(e, "Failed to read the DB instances with the AWS service account")
+			returnError(e, inventoryStatusReasonInputError, inventoryStatusMessageCredentialsError)
+			return true
+		}
+
 		return false
 	}
 
@@ -368,14 +388,14 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return false
 	}
 
-	adoptDBInstances := func() bool {
+	adoptDBInstances := func() (bool, bool) {
 		var awsDBInstances []rdstypesv2.DBInstance
 		describeDBInstancesPaginator := r.GetDescribeDBInstancesPaginatorAPI(accessKey, secretKey, region)
 		for describeDBInstancesPaginator.HasMorePages() {
 			if output, e := describeDBInstancesPaginator.NextPage(ctx); e != nil {
 				logger.Error(e, "Failed to read DB Instances of the Inventory from AWS")
 				returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetInstancesError)
-				return true
+				return true, false
 			} else if output != nil {
 				awsDBInstances = append(awsDBInstances, output.DBInstances...)
 			}
@@ -388,7 +408,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			if e := r.List(ctx, clusterDBInstanceList, client.InNamespace(inventory.Namespace)); e != nil {
 				logger.Error(e, "Failed to read DB Instances of the Inventory in the cluster")
 				returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetInstancesError)
-				return true
+				return true, false
 			}
 
 			dbInstanceMap := make(map[string]rdsv1alpha1.DBInstance, len(clusterDBInstanceList.Items))
@@ -400,7 +420,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			if e := r.List(ctx, adoptedResourceList, client.InNamespace(inventory.Namespace)); e != nil {
 				logger.Error(e, "Failed to read adopted DB Instances of the Inventory in the cluster")
 				returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetInstancesError)
-				return true
+				return true, false
 			}
 			adoptedDBInstanceMap := make(map[string]ackv1alpha1.AdoptedResource, len(adoptedResourceList.Items))
 			for _, adoptedDBInstance := range adoptedResourceList.Items {
@@ -420,12 +440,12 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 						if e := ophandler.SetOwnerAnnotations(&inventory, adoptedDBInstance); e != nil {
 							logger.Error(e, "Failed to create adopted DB Instance in the cluster")
 							returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageAdoptInstanceError)
-							return true
+							return true, false
 						}
 						if e := r.Create(ctx, adoptedDBInstance); e != nil {
 							logger.Error(e, "Failed to create adopted DB Instance in the cluster")
 							returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageAdoptInstanceError)
-							return true
+							return true, false
 						}
 						adoptingResource = true
 					}
@@ -434,7 +454,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			if adoptingResource {
 				logger.Info("DB Instance adopted")
 				returnUpdating()
-				return true
+				return true, false
 			}
 		}
 
@@ -443,12 +463,15 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			client.MatchingLabels(map[string]string{adpotedDBInstanceLabelKey: adpotedDBInstanceLabelValue})); e != nil {
 			logger.Error(e, "Failed to read adopted DB Instances of the Inventory that are created by the operator")
 			returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetInstancesError)
-			return true
+			return true, false
 		}
 		modifyDBInstance := r.GetModifyDBInstanceAPI(accessKey, secretKey, region)
 		waitForAdoptedResource := false
 		for i := range adoptedDBInstanceList.Items {
 			adoptedDBInstance := adoptedDBInstanceList.Items[i]
+			if adoptedDBInstance.Status.DBInstanceStatus != nil && *adoptedDBInstance.Status.DBInstanceStatus == "deleting" {
+				continue
+			}
 
 			if adoptedDBInstance.Spec.MasterUsername == nil || adoptedDBInstance.Spec.DBName == nil {
 				if awsDBInstance, ok := awsDBInstanceMap[*adoptedDBInstance.Spec.DBInstanceIdentifier]; ok {
@@ -466,25 +489,25 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 							if errors.IsConflict(e) {
 								logger.Info("Adopted DB Instance modified, retry reconciling")
 								returnUpdating()
-								return true
+								return true, false
 							}
 							logger.Error(e, "Failed to update connection info of the adopted DB Instance", "DB Instance", adoptedDBInstance)
 							returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageUpdateInstanceError)
-							return true
+							return true, false
 						}
 					}
 				}
 			}
 
 			if adoptedDBInstance.Spec.MasterUserPassword == nil {
-				if adoptedDBInstance.Status.DBInstanceStatus != nil && *adoptedDBInstance.Status.DBInstanceStatus != "available" {
+				if adoptedDBInstance.Status.DBInstanceStatus == nil || *adoptedDBInstance.Status.DBInstanceStatus != "available" {
 					waitForAdoptedResource = true
 					continue
 				}
 				s, e := setCredentials(ctx, r.Client, r.Scheme, &adoptedDBInstance, inventory.Namespace, &adoptedDBInstance, adoptedDBInstance.Kind)
 				if e != nil {
 					returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageUpdateInstanceError)
-					return true
+					return true, false
 				}
 				password := s.Data["password"]
 				input := &rds.ModifyDBInstanceInput{
@@ -494,26 +517,25 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				if _, e := modifyDBInstance.ModifyDBInstance(ctx, input); e != nil {
 					logger.Error(e, "Failed to update credentials of the adopted DB Instance", "DB Instance", adoptedDBInstance)
 					returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageUpdateInstanceError)
-					return true
+					return true, false
 				}
 				if e := r.Update(ctx, &adoptedDBInstance); e != nil {
 					if errors.IsConflict(e) {
 						logger.Info("Adopted DB Instance modified, retry reconciling")
 						returnUpdating()
-						return true
+						return true, false
 					}
 					logger.Error(e, "Failed to update credentials of the adopted DB Instance", "DB Instance", adoptedDBInstance)
 					returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageUpdateInstanceError)
-					return true
+					return true, false
 				}
 			}
 		}
 		if waitForAdoptedResource {
 			logger.Info("DB Instance being adopted is not available, retry reconciling")
-			returnUpdating()
-			return true
+			return false, true
 		}
-		return false
+		return false, false
 	}
 
 	syncDBInstancesStatus := func() bool {
@@ -573,7 +595,8 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return
 	}
 
-	if adoptDBInstances() {
+	rt, rq := adoptDBInstances()
+	if rt {
 		return
 	}
 
@@ -581,7 +604,11 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return
 	}
 
-	returnReady()
+	if rq {
+		returnReadyRequeue()
+	} else {
+		returnReady()
+	}
 	return
 }
 

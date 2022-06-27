@@ -190,6 +190,7 @@ var _ = BeforeSuite(func() {
 		Scheme:                             mgr.GetScheme(),
 		GetDescribeDBInstancesPaginatorAPI: controllersrdstest.NewMockDescribeDBInstancesPaginator,
 		GetModifyDBInstanceAPI:             controllersrdstest.NewModifyDBInstance,
+		GetDescribeDBInstancesAPI:          controllersrdstest.NewDescribeDBInstances,
 		ACKInstallNamespace:                testNamespace,
 		RDSCRDFilePath:                     filepath.Join("..", "rds", "config", "common", "bases"),
 	}
