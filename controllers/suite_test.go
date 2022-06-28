@@ -63,7 +63,7 @@ var (
 const (
 	testNamespace = "default"
 
-	timeout = time.Second * 10
+	timeout = time.Second * 15
 )
 
 const (

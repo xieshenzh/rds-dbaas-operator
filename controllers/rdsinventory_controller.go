@@ -80,16 +80,11 @@ const (
 	inventoryConditionReady = "SpecSynced"
 
 	inventoryStatusReasonSyncOK       = "SyncOK"
-	inventoryStatusReasonUpdating     = "Updating"
-	inventoryStatusReasonDeleting     = "Deleting"
 	inventoryStatusReasonInputError   = "InputError"
 	inventoryStatusReasonBackendError = "BackendError"
 	inventoryStatusReasonNotFound     = "NotFound"
 
-	inventoryStatusMessageUpdating            = "Updating Inventory"
 	inventoryStatusMessageUpdateError         = "Failed to update Inventory"
-	inventoryStatusMessageDeleting            = "Deleting Inventory"
-	inventoryStatusMessageInstalling          = "Installing RDS controller"
 	inventoryStatusMessageGetInstancesError   = "Failed to get Instances"
 	inventoryStatusMessageAdoptInstanceError  = "Failed to adopt DB Instance"
 	inventoryStatusMessageUpdateInstanceError = "Failed to update DB Instance"
@@ -134,18 +129,17 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	logger := log.FromContext(ctx)
 
 	var syncStatus, syncStatusReason, syncStatusMessage string
+	var syncReset bool
 
 	var inventory rdsdbaasv1alpha1.RDSInventory
 	var credentialsRef v1.Secret
 
 	var accessKey, secretKey, region string
 
-	returnUpdating := func() {
+	returnRequeueSyncReset := func() {
 		result = ctrl.Result{Requeue: true}
 		err = nil
-		syncStatus = string(metav1.ConditionUnknown)
-		syncStatusReason = inventoryStatusReasonUpdating
-		syncStatusMessage = inventoryStatusMessageUpdating
+		syncReset = true
 	}
 
 	returnError := func(e error, reason, message string) {
@@ -156,20 +150,10 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		syncStatusMessage = message
 	}
 
-	returnNotReady := func(reason, message string) {
+	returnSyncReset := func() {
 		result = ctrl.Result{}
 		err = nil
-		syncStatus = string(metav1.ConditionFalse)
-		syncStatusReason = reason
-		syncStatusMessage = message
-	}
-
-	returnRequeue := func(reason, message string) {
-		result = ctrl.Result{Requeue: true}
-		err = nil
-		syncStatus = string(metav1.ConditionFalse)
-		syncStatusReason = reason
-		syncStatusMessage = message
+		syncReset = true
 	}
 
 	returnReady := func() {
@@ -187,13 +171,17 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	updateInventoryReadyCondition := func() {
-		condition := metav1.Condition{
-			Type:    inventoryConditionReady,
-			Status:  metav1.ConditionStatus(syncStatus),
-			Reason:  syncStatusReason,
-			Message: syncStatusMessage,
+		if syncReset {
+			apimeta.RemoveStatusCondition(&inventory.Status.Conditions, inventoryConditionReady)
+		} else {
+			condition := metav1.Condition{
+				Type:    inventoryConditionReady,
+				Status:  metav1.ConditionStatus(syncStatus),
+				Reason:  syncStatusReason,
+				Message: syncStatusMessage,
+			}
+			apimeta.SetStatusCondition(&inventory.Status.Conditions, condition)
 		}
-		apimeta.SetStatusCondition(&inventory.Status.Conditions, condition)
 		if e := r.Status().Update(ctx, &inventory); e != nil {
 			if errors.IsConflict(e) {
 				logger.Info("Inventory modified, retry reconciling")
@@ -214,7 +202,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				if e := r.Update(ctx, &inventory); e != nil {
 					if errors.IsConflict(e) {
 						logger.Info("Inventory modified, retry reconciling")
-						returnUpdating()
+						returnRequeueSyncReset()
 						return true
 					}
 					logger.Error(e, "Failed to add finalizer to Inventory")
@@ -222,7 +210,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 					return true
 				}
 				logger.Info("Finalizer added to Inventory")
-				returnNotReady(inventoryStatusReasonUpdating, inventoryStatusMessageUpdating)
+				returnSyncReset()
 				return true
 			}
 		} else {
@@ -253,7 +241,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 					}
 				}
 				if deletingAdoptedResource {
-					returnUpdating()
+					returnRequeueSyncReset()
 					return true
 				}
 
@@ -262,6 +250,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 					return true
 				}
 
+				deletingRDSConfig := false
 				secret := &v1.Secret{}
 				if e := r.Get(ctx, client.ObjectKey{Namespace: r.ACKInstallNamespace, Name: secretName}, secret); e != nil {
 					if !errors.IsNotFound(e) {
@@ -273,8 +262,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 						returnError(e, inventoryStatusReasonBackendError, fmt.Sprintf(inventoryStatusMessageDeleteError, "Secret"))
 						return true
 					}
-					returnUpdating()
-					return true
+					deletingRDSConfig = true
 				}
 				configmap := &v1.ConfigMap{}
 				if e := r.Get(ctx, client.ObjectKey{Namespace: r.ACKInstallNamespace, Name: configmapName}, configmap); e != nil {
@@ -287,7 +275,10 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 						returnError(e, inventoryStatusReasonBackendError, fmt.Sprintf(inventoryStatusMessageDeleteError, "ConfigMap"))
 						return true
 					}
-					returnUpdating()
+					deletingRDSConfig = true
+				}
+				if deletingRDSConfig {
+					returnRequeueSyncReset()
 					return true
 				}
 
@@ -295,7 +286,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				if e := r.Update(ctx, &inventory); e != nil {
 					if errors.IsConflict(e) {
 						logger.Info("Inventory modified, retry reconciling")
-						returnUpdating()
+						returnRequeueSyncReset()
 						return true
 					}
 					logger.Error(e, "Failed to remove finalizer from Inventory")
@@ -303,11 +294,11 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 					return true
 				}
 				logger.Info("Finalizer removed from Inventory")
-				returnNotReady(inventoryStatusReasonUpdating, inventoryStatusMessageUpdating)
+				returnSyncReset()
 				return true
 			}
 			// Stop reconciliation as the item is being deleted
-			returnNotReady(inventoryStatusReasonDeleting, inventoryStatusMessageDeleting)
+			returnSyncReset()
 			return true
 		}
 		return false
@@ -382,7 +373,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			returnError(e, inventoryStatusReasonBackendError, fmt.Sprintf(inventoryStatusMessageVerifyInstallError, "Operator Deployment"))
 			return true
 		} else if !r {
-			returnRequeue(inventoryStatusReasonUpdating, inventoryStatusMessageInstalling)
+			returnRequeueSyncReset()
 			return true
 		}
 		return false
@@ -453,7 +444,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			}
 			if adoptingResource {
 				logger.Info("DB Instance adopted")
-				returnUpdating()
+				returnRequeueSyncReset()
 				return true, false
 			}
 		}
@@ -488,7 +479,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 						if e := r.Update(ctx, &adoptedDBInstance); e != nil {
 							if errors.IsConflict(e) {
 								logger.Info("Adopted DB Instance modified, retry reconciling")
-								returnUpdating()
+								returnRequeueSyncReset()
 								return true, false
 							}
 							logger.Error(e, "Failed to update connection info of the adopted DB Instance", "DB Instance", adoptedDBInstance)
@@ -522,7 +513,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				if e := r.Update(ctx, &adoptedDBInstance); e != nil {
 					if errors.IsConflict(e) {
 						logger.Info("Adopted DB Instance modified, retry reconciling")
-						returnUpdating()
+						returnRequeueSyncReset()
 						return true, false
 					}
 					logger.Error(e, "Failed to update credentials of the adopted DB Instance", "DB Instance", adoptedDBInstance)
@@ -561,7 +552,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if e := r.Status().Update(ctx, &inventory); e != nil {
 			if errors.IsConflict(e) {
 				logger.Info("Inventory modified, retry reconciling")
-				returnUpdating()
+				returnRequeueSyncReset()
 				return true
 			}
 			logger.Error(e, "Failed to update Inventory status")
@@ -786,8 +777,8 @@ func (r *RDSInventoryReconciler) startRDSController(ctx context.Context) error {
 func createAdoptedResource(dbInstance *rdstypesv2.DBInstance, inventory *rdsdbaasv1alpha1.RDSInventory) *ackv1alpha1.AdoptedResource {
 	return &ackv1alpha1.AdoptedResource{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:    inventory.Namespace,
-			GenerateName: fmt.Sprintf("%s-", *dbInstance.DBInstanceIdentifier),
+			Namespace: inventory.Namespace,
+			Name:      fmt.Sprintf("rhoda-adopted-db-instance-%s", strings.ToLower(*dbInstance.DBInstanceIdentifier)),
 			Annotations: map[string]string{
 				"managed-by":      "rds-dbaas-operator",
 				"owner":           inventory.Name,

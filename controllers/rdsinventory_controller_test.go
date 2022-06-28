@@ -17,8 +17,6 @@ limitations under the License.
 package controllers_test
 
 import (
-	"strings"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -119,8 +117,137 @@ var _ = Describe("RDSInventoryController", func() {
 		BeforeEach(assertResourceCreation(credential))
 		AfterEach(assertResourceDeletion(credential))
 
-		Context("when Inventory is created", func() {
-			Context("when checking the status of the Inventory", func() {
+		Context("when checking the status of the Inventory", func() {
+			dbInstance1 := &rdsv1alpha1.DBInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "db-instance-inventory-controller-1",
+					Namespace: testNamespace,
+				},
+				Spec: rdsv1alpha1.DBInstanceSpec{
+					Engine:               pointer.String("postgres"),
+					DBInstanceIdentifier: pointer.String("db-instance-1"),
+					DBInstanceClass:      pointer.String("db.t3.micro"),
+				},
+			}
+			BeforeEach(assertResourceCreation(dbInstance1))
+			AfterEach(assertResourceDeletion(dbInstance1))
+			BeforeEach(func() {
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance1), dbInstance1); err != nil {
+						return false
+					}
+					dbInstance1.Status.DBInstanceStatus = pointer.String("available")
+					err := k8sClient.Status().Update(ctx, dbInstance1)
+					return err == nil
+				}, timeout).Should(BeTrue())
+			})
+
+			dbInstance2 := &rdsv1alpha1.DBInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "db-instance-inventory-controller-2",
+					Namespace: testNamespace,
+				},
+				Spec: rdsv1alpha1.DBInstanceSpec{
+					Engine:               pointer.String("mysql"),
+					DBInstanceIdentifier: pointer.String("db-instance-2"),
+					DBInstanceClass:      pointer.String("db.t3.small"),
+				},
+			}
+			BeforeEach(assertResourceCreation(dbInstance2))
+			AfterEach(assertResourceDeletion(dbInstance2))
+			BeforeEach(func() {
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance2), dbInstance2); err != nil {
+						return false
+					}
+					dbInstance2.Status.DBInstanceStatus = pointer.String("creating")
+					err := k8sClient.Status().Update(ctx, dbInstance2)
+					return err == nil
+				}, timeout).Should(BeTrue())
+			})
+
+			dbInstance3 := &rdsv1alpha1.DBInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "db-instance-inventory-controller-3",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"rds.dbaas.redhat.com/adopted": "true",
+					},
+				},
+				Spec: rdsv1alpha1.DBInstanceSpec{
+					Engine:               pointer.String("mariadb"),
+					DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-3"),
+					DBInstanceClass:      pointer.String("db.t3.micro"),
+				},
+			}
+			BeforeEach(assertResourceCreation(dbInstance3))
+			AfterEach(assertResourceDeletion(dbInstance3))
+			BeforeEach(func() {
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance3), dbInstance3); err != nil {
+						return false
+					}
+					dbInstance3.Status.DBInstanceStatus = pointer.String("available")
+					err := k8sClient.Status().Update(ctx, dbInstance3)
+					return err == nil
+				}, timeout).Should(BeTrue())
+			})
+
+			dbInstance4 := &rdsv1alpha1.DBInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "db-instance-inventory-controller-4",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"rds.dbaas.redhat.com/adopted": "true",
+					},
+				},
+				Spec: rdsv1alpha1.DBInstanceSpec{
+					Engine:               pointer.String("postgres"),
+					DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-4"),
+					DBInstanceClass:      pointer.String("db.t3.micro"),
+				},
+			}
+			BeforeEach(assertResourceCreation(dbInstance4))
+			AfterEach(assertResourceDeletion(dbInstance4))
+			BeforeEach(func() {
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance4), dbInstance4); err != nil {
+						return false
+					}
+					dbInstance4.Status.DBInstanceStatus = pointer.String("deleting")
+					err := k8sClient.Status().Update(ctx, dbInstance4)
+					return err == nil
+				}, timeout).Should(BeTrue())
+			})
+
+			dbInstance5 := &rdsv1alpha1.DBInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "db-instance-inventory-controller-5",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"rds.dbaas.redhat.com/adopted": "true",
+					},
+				},
+				Spec: rdsv1alpha1.DBInstanceSpec{
+					Engine:               pointer.String("mysql"),
+					DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-5"),
+					DBInstanceClass:      pointer.String("db.t3.small"),
+				},
+			}
+			BeforeEach(assertResourceCreation(dbInstance5))
+			AfterEach(assertResourceDeletion(dbInstance5))
+			BeforeEach(func() {
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance5), dbInstance5); err != nil {
+						return false
+					}
+					dbInstance5.Status.DBInstanceStatus = pointer.String("creating")
+					err := k8sClient.Status().Update(ctx, dbInstance5)
+					return err == nil
+				}, timeout).Should(BeTrue())
+			})
+
+			Context("when Inventory is created", func() {
 				inventory := &rdsdbaasv1alpha1.RDSInventory{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      inventoryName,
@@ -134,135 +261,6 @@ var _ = Describe("RDSInventoryController", func() {
 				}
 				BeforeEach(assertResourceCreation(inventory))
 				AfterEach(assertResourceDeletion(inventory))
-
-				dbInstance1 := &rdsv1alpha1.DBInstance{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "db-instance-inventory-controller-1",
-						Namespace: testNamespace,
-					},
-					Spec: rdsv1alpha1.DBInstanceSpec{
-						Engine:               pointer.String("postgres"),
-						DBInstanceIdentifier: pointer.String("db-instance-1"),
-						DBInstanceClass:      pointer.String("db.t3.micro"),
-					},
-				}
-				BeforeEach(assertResourceCreation(dbInstance1))
-				AfterEach(assertResourceDeletion(dbInstance1))
-				BeforeEach(func() {
-					Eventually(func() bool {
-						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance1), dbInstance1); err != nil {
-							return false
-						}
-						dbInstance1.Status.DBInstanceStatus = pointer.String("available")
-						err := k8sClient.Status().Update(ctx, dbInstance1)
-						return err == nil
-					}, timeout).Should(BeTrue())
-				})
-
-				dbInstance2 := &rdsv1alpha1.DBInstance{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "db-instance-inventory-controller-2",
-						Namespace: testNamespace,
-					},
-					Spec: rdsv1alpha1.DBInstanceSpec{
-						Engine:               pointer.String("mysql"),
-						DBInstanceIdentifier: pointer.String("db-instance-2"),
-						DBInstanceClass:      pointer.String("db.t3.small"),
-					},
-				}
-				BeforeEach(assertResourceCreation(dbInstance2))
-				AfterEach(assertResourceDeletion(dbInstance2))
-				BeforeEach(func() {
-					Eventually(func() bool {
-						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance2), dbInstance2); err != nil {
-							return false
-						}
-						dbInstance2.Status.DBInstanceStatus = pointer.String("creating")
-						err := k8sClient.Status().Update(ctx, dbInstance2)
-						return err == nil
-					}, timeout).Should(BeTrue())
-				})
-
-				dbInstance3 := &rdsv1alpha1.DBInstance{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "db-instance-inventory-controller-3",
-						Namespace: testNamespace,
-						Labels: map[string]string{
-							"rds.dbaas.redhat.com/adopted": "true",
-						},
-					},
-					Spec: rdsv1alpha1.DBInstanceSpec{
-						Engine:               pointer.String("mariadb"),
-						DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-3"),
-						DBInstanceClass:      pointer.String("db.t3.micro"),
-					},
-				}
-				BeforeEach(assertResourceCreation(dbInstance3))
-				AfterEach(assertResourceDeletion(dbInstance3))
-				BeforeEach(func() {
-					Eventually(func() bool {
-						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance3), dbInstance3); err != nil {
-							return false
-						}
-						dbInstance3.Status.DBInstanceStatus = pointer.String("available")
-						err := k8sClient.Status().Update(ctx, dbInstance3)
-						return err == nil
-					}, timeout).Should(BeTrue())
-				})
-
-				dbInstance4 := &rdsv1alpha1.DBInstance{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "db-instance-inventory-controller-4",
-						Namespace: testNamespace,
-						Labels: map[string]string{
-							"rds.dbaas.redhat.com/adopted": "true",
-						},
-					},
-					Spec: rdsv1alpha1.DBInstanceSpec{
-						Engine:               pointer.String("postgres"),
-						DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-4"),
-						DBInstanceClass:      pointer.String("db.t3.micro"),
-					},
-				}
-				BeforeEach(assertResourceCreation(dbInstance4))
-				AfterEach(assertResourceDeletion(dbInstance4))
-				BeforeEach(func() {
-					Eventually(func() bool {
-						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance4), dbInstance4); err != nil {
-							return false
-						}
-						dbInstance4.Status.DBInstanceStatus = pointer.String("deleting")
-						err := k8sClient.Status().Update(ctx, dbInstance4)
-						return err == nil
-					}, timeout).Should(BeTrue())
-				})
-
-				dbInstance5 := &rdsv1alpha1.DBInstance{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "db-instance-inventory-controller-5",
-						Namespace: testNamespace,
-						Labels: map[string]string{
-							"rds.dbaas.redhat.com/adopted": "true",
-						},
-					},
-					Spec: rdsv1alpha1.DBInstanceSpec{
-						Engine:               pointer.String("mysql"),
-						DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-5"),
-						DBInstanceClass:      pointer.String("db.t3.small"),
-					},
-				}
-				BeforeEach(assertResourceCreation(dbInstance5))
-				AfterEach(assertResourceDeletion(dbInstance5))
-				BeforeEach(func() {
-					Eventually(func() bool {
-						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance5), dbInstance5); err != nil {
-							return false
-						}
-						dbInstance5.Status.DBInstanceStatus = pointer.String("creating")
-						err := k8sClient.Status().Update(ctx, dbInstance5)
-						return err == nil
-					}, timeout).Should(BeTrue())
-				})
 
 				It("should start the RDS controller, adopt the DB instances and sync DB instance status", func() {
 					By("checking if the Secret for RDS controller is created")
@@ -399,7 +397,7 @@ var _ = Describe("RDSInventoryController", func() {
 						if instance, ok := dbInstancesMap["mock-db-instance-1"]; !ok {
 							return false
 						} else {
-							if !strings.HasPrefix(instance.Name, "mock-db-instance-1") {
+							if instance.Name != "rhoda-adopted-db-instance-mock-db-instance-1" {
 								return false
 							}
 							typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
@@ -418,7 +416,7 @@ var _ = Describe("RDSInventoryController", func() {
 						if instance, ok := dbInstancesMap["mock-db-instance-2"]; !ok {
 							return false
 						} else {
-							if !strings.HasPrefix(instance.Name, "mock-db-instance-2") {
+							if instance.Name != "rhoda-adopted-db-instance-mock-db-instance-2" {
 								return false
 							}
 							typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
@@ -437,7 +435,7 @@ var _ = Describe("RDSInventoryController", func() {
 						if instance, ok := dbInstancesMap["mock-db-instance-3"]; !ok {
 							return false
 						} else {
-							if !strings.HasPrefix(instance.Name, "mock-db-instance-3") {
+							if instance.Name != "rhoda-adopted-db-instance-mock-db-instance-3" {
 								return false
 							}
 							typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
@@ -456,7 +454,7 @@ var _ = Describe("RDSInventoryController", func() {
 						if instance, ok := dbInstancesMap["mock-db-instance-4"]; !ok {
 							return false
 						} else {
-							if !strings.HasPrefix(instance.Name, "mock-db-instance-4") {
+							if instance.Name != "rhoda-adopted-db-instance-mock-db-instance-4" {
 								return false
 							}
 							typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
@@ -475,7 +473,7 @@ var _ = Describe("RDSInventoryController", func() {
 						if instance, ok := dbInstancesMap["mock-db-instance-5"]; !ok {
 							return false
 						} else {
-							if !strings.HasPrefix(instance.Name, "mock-db-instance-5") {
+							if instance.Name != "rhoda-adopted-db-instance-mock-db-instance-5" {
 								return false
 							}
 							typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
