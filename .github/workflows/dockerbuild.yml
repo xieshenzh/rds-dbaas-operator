@@ -1,0 +1,25 @@
+name: Build Image
+
+on:
+  push:
+    branches:
+    - main
+    - release-*
+  pull_request:
+    branches:
+    - main
+    - release-*
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Buildah Action
+      uses: redhat-actions/buildah-build@v2
+      with:
+        image: rds-dbaas-operator
+        tags: ${{ github.sha }}
+        containerfiles: |
+          ./Dockerfile

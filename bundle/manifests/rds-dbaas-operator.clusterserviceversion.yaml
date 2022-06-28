@@ -59,7 +59,7 @@ metadata:
       ]
     capabilities: Basic Install
     categories: Database
-    containerImage: quay.io/xiezhang/rds-dbaas-operator:v0.1.0
+    containerImage: quay.io/ecosystem-appeng/rds-dbaas-operator:v0.1.0
     description: RHODA Provider Operator for Amazon RDS.
     operatorframework.io/suggested-namespace: openshift-dbaas-operator
     operators.operatorframework.io/builder: operator-sdk-v1.19.0+git
