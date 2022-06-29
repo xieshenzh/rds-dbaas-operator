@@ -454,6 +454,9 @@ var _ = Describe("RDSConnectionController", func() {
 													port, portOk := configmap.Data["port"]
 													Expect(portOk).Should(BeTrue())
 													Expect(port).Should(Equal("9000"))
+													db, dbOk := configmap.Data["database"]
+													Expect(dbOk).Should(BeTrue())
+													Expect(db).Should(Equal("postgres"))
 												})
 											})
 										})
@@ -463,6 +466,272 @@ var _ = Describe("RDSConnectionController", func() {
 						})
 					})
 				})
+			})
+		})
+	})
+
+	Context("when Inventory is created and ready", func() {
+		credentialName := "credentials-ref-jdbc-url-connection-controller"
+		accessKey := "AKIAIOSFODNN7EXAMPLEINVENTORYCONTROLLER"
+		secretKey := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+		region := "us-east-1"
+
+		credential := &v1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      credentialName,
+				Namespace: testNamespace,
+			},
+			Data: map[string][]byte{
+				"AWS_ACCESS_KEY_ID":     []byte(accessKey),
+				"AWS_SECRET_ACCESS_KEY": []byte(secretKey), //#nosec G101
+				"AWS_REGION":            []byte(region),
+			},
+		}
+		BeforeEach(assertResourceCreation(credential))
+		AfterEach(assertResourceDeletion(credential))
+
+		inventoryName := "rds-inventory-jdbc-url-connection-controller"
+		inventory := &rdsdbaasv1alpha1.RDSInventory{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      inventoryName,
+				Namespace: testNamespace,
+			},
+			Spec: dbaasv1alpha1.DBaaSInventorySpec{
+				CredentialsRef: &dbaasv1alpha1.LocalObjectReference{
+					Name: credentialName,
+				},
+			},
+		}
+		BeforeEach(assertResourceCreation(inventory))
+		AfterEach(assertResourceDeletion(inventory))
+
+		passwordSecret := &v1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "secret-jdbc-url-connection-controller",
+				Namespace: testNamespace,
+			},
+			Data: map[string][]byte{
+				"password": []byte("testpassword"),
+			},
+		}
+		BeforeEach(assertResourceCreation(passwordSecret))
+		AfterEach(assertResourceDeletion(passwordSecret))
+
+		Context("when Connection for Oracle is created", func() {
+			instanceID := "instance-id-oracle-connection-controller"
+			dbInstance := &rdsv1alpha1.DBInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "db-instance-oracle-connection-controller",
+					Namespace: testNamespace,
+				},
+				Spec: rdsv1alpha1.DBInstanceSpec{
+					Engine:               pointer.String("oracle-se2"),
+					DBInstanceIdentifier: pointer.String(instanceID),
+					DBInstanceClass:      pointer.String("db.t3.micro"),
+					MasterUserPassword: &ackv1alpha1.SecretKeyReference{
+						SecretReference: v1.SecretReference{
+							Name:      "secret-jdbc-url-connection-controller",
+							Namespace: testNamespace,
+						},
+						Key: "password",
+					},
+					MasterUsername: pointer.String("user-oracle-connection-controller"),
+				},
+			}
+			BeforeEach(assertResourceCreation(dbInstance))
+			AfterEach(assertResourceDeletion(dbInstance))
+
+			BeforeEach(func() {
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance), dbInstance); err != nil {
+						return false
+					}
+					dbInstance.Status.DBInstanceStatus = pointer.String("available")
+					dbInstance.Status.Endpoint = &rdsv1alpha1.Endpoint{
+						Address: pointer.String("address-oracle-connection-controller"),
+						Port:    pointer.Int64(9000),
+					}
+					err := k8sClient.Status().Update(ctx, dbInstance)
+					return err == nil
+				}, timeout).Should(BeTrue())
+			})
+
+			connectionName := "rds-connection-oracle-connection-controller"
+			connection := &rdsdbaasv1alpha1.RDSConnection{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      connectionName,
+					Namespace: testNamespace,
+				},
+				Spec: dbaasv1alpha1.DBaaSConnectionSpec{
+					InventoryRef: dbaasv1alpha1.NamespacedName{
+						Name:      inventoryName,
+						Namespace: testNamespace,
+					},
+					InstanceID: instanceID,
+				},
+			}
+			BeforeEach(assertResourceCreation(connection))
+			AfterEach(assertResourceDeletion(connection))
+
+			It("should add jdbc-url to the ConfigMap for service binding", func() {
+				By("checking the status of the Connection")
+				conn := &rdsdbaasv1alpha1.RDSConnection{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      connectionName,
+						Namespace: testNamespace,
+					},
+				}
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(conn), conn); err != nil {
+						return false
+					}
+					condition := apimeta.FindStatusCondition(conn.Status.Conditions, "ReadyForBinding")
+					if condition == nil || condition.Status != metav1.ConditionTrue || condition.Reason != "Ready" {
+						return false
+					}
+					Expect(conn.Status.CredentialsRef).ShouldNot(BeNil())
+					Expect(conn.Status.CredentialsRef.Name).Should(Equal(fmt.Sprintf("%s-credentials", conn.Name)))
+					Expect(conn.Status.ConnectionInfoRef).ShouldNot(BeNil())
+					Expect(conn.Status.ConnectionInfoRef.Name).Should(Equal(fmt.Sprintf("%s-configs", conn.Name)))
+					return true
+				}, timeout).Should(BeTrue())
+
+				By("checking the ConfigMap of the Connection")
+				configmap := &v1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      conn.Status.ConnectionInfoRef.Name,
+						Namespace: testNamespace,
+					},
+				}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(configmap), configmap)
+				Expect(err).ShouldNot(HaveOccurred())
+				ju, juOk := configmap.Data["jdbc-url"]
+				Expect(juOk).Should(BeTrue())
+				Expect(ju).Should(Equal("jdbc:oracle:thin:@address-oracle-connection-controller:9000/ORCL"))
+				t, typeOk := configmap.Data["type"]
+				Expect(typeOk).Should(BeTrue())
+				Expect(t).Should(Equal("oracle"))
+				provider, providerOk := configmap.Data["provider"]
+				Expect(providerOk).Should(BeTrue())
+				Expect(provider).Should(Equal("Red Hat DBaaS / Amazon Relational Database Service (RDS)"))
+				host, hostOk := configmap.Data["host"]
+				Expect(hostOk).Should(BeTrue())
+				Expect(host).Should(Equal("address-oracle-connection-controller"))
+				port, portOk := configmap.Data["port"]
+				Expect(portOk).Should(BeTrue())
+				Expect(port).Should(Equal("9000"))
+				db, dbOk := configmap.Data["database"]
+				Expect(dbOk).Should(BeTrue())
+				Expect(db).Should(Equal("ORCL"))
+			})
+		})
+
+		Context("when Connection for SqlServer is created", func() {
+			instanceID := "instance-id-sqlserver-connection-controller"
+			dbInstance := &rdsv1alpha1.DBInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "db-instance-sqlserver-connection-controller",
+					Namespace: testNamespace,
+				},
+				Spec: rdsv1alpha1.DBInstanceSpec{
+					Engine:               pointer.String("sqlserver-ex"),
+					DBInstanceIdentifier: pointer.String(instanceID),
+					DBInstanceClass:      pointer.String("db.t3.micro"),
+					MasterUserPassword: &ackv1alpha1.SecretKeyReference{
+						SecretReference: v1.SecretReference{
+							Name:      "secret-jdbc-url-connection-controller",
+							Namespace: testNamespace,
+						},
+						Key: "password",
+					},
+					MasterUsername: pointer.String("user-sqlserver-connection-controller"),
+				},
+			}
+			BeforeEach(assertResourceCreation(dbInstance))
+			AfterEach(assertResourceDeletion(dbInstance))
+
+			BeforeEach(func() {
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance), dbInstance); err != nil {
+						return false
+					}
+					dbInstance.Status.DBInstanceStatus = pointer.String("available")
+					dbInstance.Status.Endpoint = &rdsv1alpha1.Endpoint{
+						Address: pointer.String("address-sqlserver-connection-controller"),
+						Port:    pointer.Int64(9000),
+					}
+					err := k8sClient.Status().Update(ctx, dbInstance)
+					return err == nil
+				}, timeout).Should(BeTrue())
+			})
+
+			connectionName := "rds-connection-sqlserver-connection-controller"
+			connection := &rdsdbaasv1alpha1.RDSConnection{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      connectionName,
+					Namespace: testNamespace,
+				},
+				Spec: dbaasv1alpha1.DBaaSConnectionSpec{
+					InventoryRef: dbaasv1alpha1.NamespacedName{
+						Name:      inventoryName,
+						Namespace: testNamespace,
+					},
+					InstanceID: instanceID,
+				},
+			}
+			BeforeEach(assertResourceCreation(connection))
+			AfterEach(assertResourceDeletion(connection))
+
+			It("should add jdbc-url to the ConfigMap for service binding", func() {
+				By("checking the status of the Connection")
+				conn := &rdsdbaasv1alpha1.RDSConnection{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      connectionName,
+						Namespace: testNamespace,
+					},
+				}
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(conn), conn); err != nil {
+						return false
+					}
+					condition := apimeta.FindStatusCondition(conn.Status.Conditions, "ReadyForBinding")
+					if condition == nil || condition.Status != metav1.ConditionTrue || condition.Reason != "Ready" {
+						return false
+					}
+					Expect(conn.Status.CredentialsRef).ShouldNot(BeNil())
+					Expect(conn.Status.CredentialsRef.Name).Should(Equal(fmt.Sprintf("%s-credentials", conn.Name)))
+					Expect(conn.Status.ConnectionInfoRef).ShouldNot(BeNil())
+					Expect(conn.Status.ConnectionInfoRef.Name).Should(Equal(fmt.Sprintf("%s-configs", conn.Name)))
+					return true
+				}, timeout).Should(BeTrue())
+
+				By("checking the ConfigMap of the Connection")
+				configmap := &v1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      conn.Status.ConnectionInfoRef.Name,
+						Namespace: testNamespace,
+					},
+				}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(configmap), configmap)
+				Expect(err).ShouldNot(HaveOccurred())
+				ju, juOk := configmap.Data["jdbc-url"]
+				Expect(juOk).Should(BeTrue())
+				Expect(ju).Should(Equal("jdbc:sqlserver://address-sqlserver-connection-controller:9000;databaseName=master"))
+				t, typeOk := configmap.Data["type"]
+				Expect(typeOk).Should(BeTrue())
+				Expect(t).Should(Equal("sqlserver"))
+				provider, providerOk := configmap.Data["provider"]
+				Expect(providerOk).Should(BeTrue())
+				Expect(provider).Should(Equal("Red Hat DBaaS / Amazon Relational Database Service (RDS)"))
+				host, hostOk := configmap.Data["host"]
+				Expect(hostOk).Should(BeTrue())
+				Expect(host).Should(Equal("address-sqlserver-connection-controller"))
+				port, portOk := configmap.Data["port"]
+				Expect(portOk).Should(BeTrue())
+				Expect(port).Should(Equal("9000"))
+				db, dbOk := configmap.Data["database"]
+				Expect(dbOk).Should(BeTrue())
+				Expect(db).Should(Equal("master"))
 			})
 		})
 	})
