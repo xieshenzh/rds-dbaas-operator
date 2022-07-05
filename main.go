@@ -146,6 +146,7 @@ func main() {
 		Scheme:                             mgr.GetScheme(),
 		GetDescribeDBInstancesPaginatorAPI: controllersrds.NewDescribeDBInstancesPaginator,
 		GetModifyDBInstanceAPI:             controllersrds.NewModifyDBInstance,
+		GetDescribeDBInstancesAPI:          controllersrds.NewDescribeDBInstances,
 		ACKInstallNamespace:                installNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RDSInventory")

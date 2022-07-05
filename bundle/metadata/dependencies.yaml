@@ -2,4 +2,4 @@ dependencies:
   - type: olm.package
     value:
       packageName: ack-rds-controller
-      version: "0.0.26"
+      version: "0.0.27"

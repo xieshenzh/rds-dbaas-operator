@@ -88,7 +88,7 @@ func generateBindingType(engine string) string {
 
 func getDefaultDBName(engine string) *string {
 	switch engine {
-	case "postgres", "aurora-postgresql":
+	case postgres, auroraPostgresql:
 		return pointer.String("postgres")
 	case sqlserverEe, sqlserverSe, sqlserverEx, sqlserverWeb, customSqlserverEe, customSqlserverSe, customSqlserverWeb:
 		return pointer.String("master")

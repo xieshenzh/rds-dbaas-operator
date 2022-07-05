@@ -63,7 +63,7 @@ var (
 const (
 	testNamespace = "default"
 
-	timeout = time.Second * 10
+	timeout = time.Second * 15
 )
 
 const (
@@ -190,6 +190,7 @@ var _ = BeforeSuite(func() {
 		Scheme:                             mgr.GetScheme(),
 		GetDescribeDBInstancesPaginatorAPI: controllersrdstest.NewMockDescribeDBInstancesPaginator,
 		GetModifyDBInstanceAPI:             controllersrdstest.NewModifyDBInstance,
+		GetDescribeDBInstancesAPI:          controllersrdstest.NewDescribeDBInstances,
 		ACKInstallNamespace:                testNamespace,
 		RDSCRDFilePath:                     filepath.Join("..", "rds", "config", "common", "bases"),
 	}

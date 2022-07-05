@@ -18,6 +18,7 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"k8s.io/utils/pointer"
@@ -35,12 +36,10 @@ var dbInstances = []*rds.DescribeDBInstancesOutput{
 				DBInstanceStatus:     pointer.String("available"),
 			},
 			{
-
 				DBInstanceIdentifier: pointer.String("mock-db-instance-2"),
 				DBInstanceStatus:     pointer.String("available"),
 			},
 			{
-
 				DBInstanceIdentifier: pointer.String("mock-db-instance-3"),
 				DBInstanceStatus:     pointer.String("available"),
 			},
@@ -53,9 +52,30 @@ var dbInstances = []*rds.DescribeDBInstancesOutput{
 				DBInstanceStatus:     pointer.String("available"),
 			},
 			{
-
 				DBInstanceIdentifier: pointer.String("mock-db-instance-5"),
 				DBInstanceStatus:     pointer.String("available"),
+			},
+		},
+	},
+	{
+		DBInstances: []types.DBInstance{
+			{
+				DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-3"),
+				DBInstanceStatus:     pointer.String("available"),
+				DBName:               pointer.String("test-dbname"),
+				MasterUsername:       pointer.String("test-username"),
+			},
+			{
+				DBInstanceIdentifier: pointer.String("mock-adpoted-db-instance-4"),
+				DBInstanceStatus:     pointer.String("deleting"),
+				DBName:               pointer.String("test-dbname"),
+				MasterUsername:       pointer.String("test-username"),
+			},
+			{
+				DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-5"),
+				DBInstanceStatus:     pointer.String("creating"),
+				DBName:               pointer.String("test-dbname"),
+				MasterUsername:       pointer.String("test-username"),
 			},
 		},
 	},
@@ -69,7 +89,7 @@ type mockDescribeDBInstancesPaginator struct {
 func NewMockDescribeDBInstancesPaginator(accessKey, secretKey, region string) controllersrds.DescribeDBInstancesPaginatorAPI {
 	counter := 0
 	if strings.HasSuffix(accessKey, "INVENTORYCONTROLLER") {
-		counter = 2
+		counter = 3
 	}
 	return &mockDescribeDBInstancesPaginator{accessKey: accessKey, secretKey: secretKey, region: region, counter: counter}
 }
@@ -81,7 +101,7 @@ func (m *mockDescribeDBInstancesPaginator) HasMorePages() bool {
 func (m *mockDescribeDBInstancesPaginator) NextPage(ctx context.Context, f ...func(option *rds.Options)) (*rds.DescribeDBInstancesOutput, error) {
 	if m.counter > 0 {
 		m.counter--
-		return dbInstances[1-m.counter], nil
+		return dbInstances[m.counter], nil
 	}
 	return nil, nil
 }
@@ -95,5 +115,20 @@ func NewModifyDBInstance(accessKey, secretKey, region string) controllersrds.Mod
 }
 
 func (m *mockModifyDBInstance) ModifyDBInstance(ctx context.Context, params *rds.ModifyDBInstanceInput, optFns ...func(*rds.Options)) (*rds.ModifyDBInstanceOutput, error) {
+	return nil, nil
+}
+
+type mockDescribeDBInstances struct {
+	accessKey, secretKey, region string
+}
+
+func NewDescribeDBInstances(accessKey, secretKey, region string) controllersrds.DescribeDBInstancesAPI {
+	return &mockDescribeDBInstances{accessKey: accessKey, secretKey: secretKey, region: region}
+}
+
+func (d *mockDescribeDBInstances) DescribeDBInstances(ctx context.Context, params *rds.DescribeDBInstancesInput, optFns ...func(*rds.Options)) (*rds.DescribeDBInstancesOutput, error) {
+	if strings.HasSuffix(d.accessKey, "INVALID") {
+		return nil, fmt.Errorf("invalid accesskey")
+	}
 	return nil, nil
 }

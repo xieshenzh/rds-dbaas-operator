@@ -80,7 +80,8 @@ const (
 	instanceStatusReasonBackendError = "BackendError"
 	instanceStatusReasonNotFound     = "NotFound"
 	instanceStatusReasonUnreachable  = "Unreachable"
-	instanceStatusReasonDBInstance   = "DBInstance"
+
+	instanceStatusReasonDBInstance = "DBInstance"
 
 	instanceStatusMessageUpdateError         = "Failed to update Instance"
 	instanceStatusMessageCreating            = "Creating Instance"

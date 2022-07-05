@@ -360,15 +360,22 @@ func setConfigMap(cm *v1.ConfigMap, dbInstance *rdsv1alpha1.DBInstance) {
 	}
 
 	if dbInstance.Spec.Engine != nil {
+		host := dataMap["host"]
+		port := dataMap["port"]
+		db, dbOk := dataMap["database"]
+
 		switch *dbInstance.Spec.Engine {
 		case oracleSe2, oracleSe2Cdb, oracleEe, oracleEeCdb, customOracleEe:
-			host := dataMap["host"]
-			port := dataMap["port"]
-			db, dbOk := dataMap["database"]
 			if dbOk {
 				dataMap["jdbc-url"] = fmt.Sprintf("jdbc:oracle:thin:@%s:%s/%s", host, port, db)
 			} else {
 				dataMap["jdbc-url"] = fmt.Sprintf("jdbc:oracle:thin:@%s:%s", host, port)
+			}
+		case sqlserverEe, sqlserverSe, sqlserverEx, sqlserverWeb, customSqlserverEe, customSqlserverSe, customSqlserverWeb:
+			if dbOk {
+				dataMap["jdbc-url"] = fmt.Sprintf("jdbc:sqlserver://%s:%s;databaseName=%s", host, port, db)
+			} else {
+				dataMap["jdbc-url"] = fmt.Sprintf("jdbc:sqlserver://%s:%s", host, port)
 			}
 		default:
 		}
