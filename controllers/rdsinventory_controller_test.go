@@ -247,397 +247,531 @@ var _ = Describe("RDSInventoryController", func() {
 				}, timeout).Should(BeTrue())
 			})
 
-			Context("when Inventory is created", func() {
-				inventory := &rdsdbaasv1alpha1.RDSInventory{
+			dbInstance6 := &rdsv1alpha1.DBInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "db-instance-inventory-controller-6",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"rds.dbaas.redhat.com/adopted": "true",
+					},
+				},
+				Spec: rdsv1alpha1.DBInstanceSpec{
+					Engine:               pointer.String("mysql"),
+					DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-6"),
+					DBInstanceClass:      pointer.String("db.t3.small"),
+					DBClusterIdentifier:  pointer.String("test-cluster"),
+				},
+			}
+			BeforeEach(assertResourceCreation(dbInstance6))
+			AfterEach(assertResourceDeletion(dbInstance6))
+			BeforeEach(func() {
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance6), dbInstance6); err != nil {
+						return false
+					}
+					dbInstance6.Status.DBInstanceStatus = pointer.String("available")
+					err := k8sClient.Status().Update(ctx, dbInstance6)
+					return err == nil
+				}, timeout).Should(BeTrue())
+			})
+
+			Context("when mocking RDS controller adopting resources", func() {
+				mockDBInstance1 := &rdsv1alpha1.DBInstance{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      inventoryName,
+						Name:      "rhoda-adopted-db-instance-mock-db-instance-1",
 						Namespace: testNamespace,
 					},
-					Spec: dbaasv1alpha1.DBaaSInventorySpec{
-						CredentialsRef: &dbaasv1alpha1.LocalObjectReference{
-							Name: credentialName,
-						},
+					Spec: rdsv1alpha1.DBInstanceSpec{
+						Engine:               pointer.String("postgres"),
+						DBInstanceIdentifier: pointer.String("mock-db-instance-1"),
+						DBInstanceClass:      pointer.String("db.t3.micro"),
 					},
 				}
-				BeforeEach(assertResourceCreation(inventory))
-				AfterEach(assertResourceDeletion(inventory))
+				AfterEach(assertResourceDeletionIfExist(mockDBInstance1))
 
-				It("should start the RDS controller, adopt the DB instances and sync DB instance status", func() {
-					By("checking if the Secret for RDS controller is created")
-					rdsSecret := &v1.Secret{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "ack-rds-user-secrets",
-							Namespace: testNamespace,
-						},
-					}
-					Eventually(func() bool {
-						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rdsSecret), rdsSecret); err != nil {
-							return false
-						}
-						ak, akOk := rdsSecret.Data["AWS_ACCESS_KEY_ID"]
-						Expect(akOk).Should(BeTrue())
-						Expect(ak).Should(Equal([]byte(accessKey)))
-						sk, skOk := rdsSecret.Data["AWS_SECRET_ACCESS_KEY"]
-						Expect(skOk).Should(BeTrue())
-						Expect(sk).Should(Equal([]byte(secretKey)))
-						return true
-					}, timeout).Should(BeTrue())
+				mockDBInstance2 := &rdsv1alpha1.DBInstance{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "rhoda-adopted-db-instance-mock-db-instance-2",
+						Namespace: testNamespace,
+					},
+					Spec: rdsv1alpha1.DBInstanceSpec{
+						Engine:               pointer.String("postgres"),
+						DBInstanceIdentifier: pointer.String("mock-db-instance-2"),
+						DBInstanceClass:      pointer.String("db.t3.micro"),
+					},
+				}
+				AfterEach(assertResourceDeletionIfExist(mockDBInstance2))
 
-					By("checking if the ConfigMap for RDS controller is created")
-					rdsConfigMap := &v1.ConfigMap{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "ack-rds-user-config",
-							Namespace: testNamespace,
-						},
-					}
-					Eventually(func() bool {
-						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rdsConfigMap), rdsConfigMap); err != nil {
-							return false
-						}
-						r, ok := rdsConfigMap.Data["AWS_REGION"]
-						Expect(ok).Should(BeTrue())
-						Expect(r).Should(Equal(region))
-						return true
-					}, timeout).Should(BeTrue())
+				mockDBInstance3 := &rdsv1alpha1.DBInstance{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "rhoda-adopted-db-instance-mock-db-instance-3",
+						Namespace: testNamespace,
+					},
+					Spec: rdsv1alpha1.DBInstanceSpec{
+						Engine:               pointer.String("postgres"),
+						DBInstanceIdentifier: pointer.String("mock-db-instance-3"),
+						DBInstanceClass:      pointer.String("db.t3.micro"),
+					},
+				}
+				AfterEach(assertResourceDeletionIfExist(mockDBInstance3))
 
-					By("checking if the RDS controller is started")
-					deployment := &appsv1.Deployment{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "ack-rds-controller",
-							Namespace: testNamespace,
-						},
-					}
-					Eventually(func() bool {
-						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
-							return false
-						}
-						return *deployment.Spec.Replicas == 1 && deployment.Status.Replicas == 1 && deployment.Status.ReadyReplicas == 1
-					}, timeout).Should(BeTrue())
+				mockDBInstance4 := &rdsv1alpha1.DBInstance{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "rhoda-adopted-db-instance-mock-db-instance-4",
+						Namespace: testNamespace,
+					},
+					Spec: rdsv1alpha1.DBInstanceSpec{
+						Engine:               pointer.String("postgres"),
+						DBInstanceIdentifier: pointer.String("mock-db-instance-4"),
+						DBInstanceClass:      pointer.String("db.t3.micro"),
+					},
+				}
+				AfterEach(assertResourceDeletionIfExist(mockDBInstance4))
 
-					By("checking Inventory status")
-					inv := &rdsdbaasv1alpha1.RDSInventory{
+				Context("when Inventory is created", func() {
+					inventory := &rdsdbaasv1alpha1.RDSInventory{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      inventoryName,
 							Namespace: testNamespace,
 						},
+						Spec: dbaasv1alpha1.DBaaSInventorySpec{
+							CredentialsRef: &dbaasv1alpha1.LocalObjectReference{
+								Name: credentialName,
+							},
+						},
 					}
-					Eventually(func() bool {
-						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(inv), inv); err != nil {
-							return false
-						}
-						condition := apimeta.FindStatusCondition(inv.Status.Conditions, "SpecSynced")
-						if condition == nil || condition.Status != metav1.ConditionTrue || condition.Reason != "SyncOK" {
-							return false
-						}
-						if len(inv.Status.Instances) < 5 {
-							return false
-						}
-						instancesMap := map[string]dbaasv1alpha1.Instance{}
-						for i := range inv.Status.Instances {
-							ins := inv.Status.Instances[i]
-							instancesMap[ins.InstanceID] = ins
-						}
-						if ins, ok := instancesMap[*dbInstance1.Spec.DBInstanceIdentifier]; !ok {
-							return false
-						} else {
-							Expect(ins.Name).Should(Equal(dbInstance1.Name))
-							s, ok := ins.InstanceInfo["dbInstanceStatus"]
-							Expect(ok).Should(BeTrue())
-							Expect(s).Should(Equal(*dbInstance1.Status.DBInstanceStatus))
-						}
-						if ins, ok := instancesMap[*dbInstance2.Spec.DBInstanceIdentifier]; !ok {
-							return false
-						} else {
-							Expect(ins.Name).Should(Equal(dbInstance2.Name))
-							s, ok := ins.InstanceInfo["dbInstanceStatus"]
-							Expect(ok).Should(BeTrue())
-							Expect(s).Should(Equal(*dbInstance2.Status.DBInstanceStatus))
-						}
-						if ins, ok := instancesMap[*dbInstance3.Spec.DBInstanceIdentifier]; !ok {
-							return false
-						} else {
-							Expect(ins.Name).Should(Equal(dbInstance3.Name))
-							s, ok := ins.InstanceInfo["dbInstanceStatus"]
-							Expect(ok).Should(BeTrue())
-							Expect(s).Should(Equal(*dbInstance3.Status.DBInstanceStatus))
-						}
-						if ins, ok := instancesMap[*dbInstance4.Spec.DBInstanceIdentifier]; !ok {
-							return false
-						} else {
-							Expect(ins.Name).Should(Equal(dbInstance4.Name))
-							s, ok := ins.InstanceInfo["dbInstanceStatus"]
-							Expect(ok).Should(BeTrue())
-							Expect(s).Should(Equal(*dbInstance4.Status.DBInstanceStatus))
-						}
-						if ins, ok := instancesMap[*dbInstance5.Spec.DBInstanceIdentifier]; !ok {
-							return false
-						} else {
-							Expect(ins.Name).Should(Equal(dbInstance5.Name))
-							s, ok := ins.InstanceInfo["dbInstanceStatus"]
-							Expect(ok).Should(BeTrue())
-							Expect(s).Should(Equal(*dbInstance5.Status.DBInstanceStatus))
-						}
-						return true
-					}, timeout).Should(BeTrue())
+					BeforeEach(assertResourceCreation(inventory))
+					AfterEach(assertResourceDeletion(inventory))
 
-					By("checking if DB instances are adopted")
-					Eventually(func() bool {
-						adoptedDBInstances := &ackv1alpha1.AdoptedResourceList{}
-						if err := k8sClient.List(ctx, adoptedDBInstances, client.InNamespace(testNamespace)); err != nil {
-							return false
+					It("should start the RDS controller, adopt the DB instances and sync DB instance status", func() {
+						By("checking if the Secret for RDS controller is created")
+						rdsSecret := &v1.Secret{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "ack-rds-user-secrets",
+								Namespace: testNamespace,
+							},
 						}
-						if len(adoptedDBInstances.Items) < 5 {
-							return false
-						}
-						dbInstancesMap := map[string]ackv1alpha1.AdoptedResource{}
-						for i := range adoptedDBInstances.Items {
-							instance := adoptedDBInstances.Items[i]
-							dbInstancesMap[instance.Spec.AWS.NameOrID] = instance
-						}
-						if instance, ok := dbInstancesMap["mock-db-instance-1"]; !ok {
-							return false
-						} else {
-							if instance.Name != "rhoda-adopted-db-instance-mock-db-instance-1" {
+						Eventually(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rdsSecret), rdsSecret); err != nil {
 								return false
 							}
-							typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
-							Expect(typeOk).Should(BeTrue())
-							Expect(typeString).Should(Equal("RDSInventory.dbaas.redhat.com"))
-							namespacedNameString, nsnOk := instance.GetAnnotations()[ophandler.NamespacedNameAnnotation]
-							Expect(nsnOk).Should(BeTrue())
-							Expect(namespacedNameString).Should(Equal(testNamespace + "/" + inventoryName))
-							Expect(instance.Spec.Kubernetes.GroupKind.Kind).Should(Equal("DBInstance"))
-							Expect(instance.Spec.Kubernetes.GroupKind.Group).Should(Equal(rdsv1alpha1.GroupVersion.Group))
-							Expect(instance.Spec.Kubernetes.Metadata.Namespace).Should(Equal(testNamespace))
-							label, labelOk := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]
-							Expect(labelOk).Should(BeTrue())
-							Expect(label).Should(Equal("true"))
+							ak, akOk := rdsSecret.Data["AWS_ACCESS_KEY_ID"]
+							Expect(akOk).Should(BeTrue())
+							Expect(ak).Should(Equal([]byte(accessKey)))
+							sk, skOk := rdsSecret.Data["AWS_SECRET_ACCESS_KEY"]
+							Expect(skOk).Should(BeTrue())
+							Expect(sk).Should(Equal([]byte(secretKey)))
+							return true
+						}, timeout).Should(BeTrue())
+
+						By("checking if the ConfigMap for RDS controller is created")
+						rdsConfigMap := &v1.ConfigMap{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "ack-rds-user-config",
+								Namespace: testNamespace,
+							},
 						}
-						if instance, ok := dbInstancesMap["mock-db-instance-2"]; !ok {
-							return false
-						} else {
-							if instance.Name != "rhoda-adopted-db-instance-mock-db-instance-2" {
+						Eventually(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rdsConfigMap), rdsConfigMap); err != nil {
 								return false
 							}
-							typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
-							Expect(typeOk).Should(BeTrue())
-							Expect(typeString).Should(Equal("RDSInventory.dbaas.redhat.com"))
-							namespacedNameString, nsnOk := instance.GetAnnotations()[ophandler.NamespacedNameAnnotation]
-							Expect(nsnOk).Should(BeTrue())
-							Expect(namespacedNameString).Should(Equal(testNamespace + "/" + inventoryName))
-							Expect(instance.Spec.Kubernetes.GroupKind.Kind).Should(Equal("DBInstance"))
-							Expect(instance.Spec.Kubernetes.GroupKind.Group).Should(Equal(rdsv1alpha1.GroupVersion.Group))
-							Expect(instance.Spec.Kubernetes.Metadata.Namespace).Should(Equal(testNamespace))
-							label, labelOk := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]
-							Expect(labelOk).Should(BeTrue())
-							Expect(label).Should(Equal("true"))
-						}
-						if instance, ok := dbInstancesMap["mock-db-instance-3"]; !ok {
-							return false
-						} else {
-							if instance.Name != "rhoda-adopted-db-instance-mock-db-instance-3" {
-								return false
-							}
-							typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
-							Expect(typeOk).Should(BeTrue())
-							Expect(typeString).Should(Equal("RDSInventory.dbaas.redhat.com"))
-							namespacedNameString, nsnOk := instance.GetAnnotations()[ophandler.NamespacedNameAnnotation]
-							Expect(nsnOk).Should(BeTrue())
-							Expect(namespacedNameString).Should(Equal(testNamespace + "/" + inventoryName))
-							Expect(instance.Spec.Kubernetes.GroupKind.Kind).Should(Equal("DBInstance"))
-							Expect(instance.Spec.Kubernetes.GroupKind.Group).Should(Equal(rdsv1alpha1.GroupVersion.Group))
-							Expect(instance.Spec.Kubernetes.Metadata.Namespace).Should(Equal(testNamespace))
-							label, labelOk := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]
-							Expect(labelOk).Should(BeTrue())
-							Expect(label).Should(Equal("true"))
-						}
-						if instance, ok := dbInstancesMap["mock-db-instance-4"]; !ok {
-							return false
-						} else {
-							if instance.Name != "rhoda-adopted-db-instance-mock-db-instance-4" {
-								return false
-							}
-							typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
-							Expect(typeOk).Should(BeTrue())
-							Expect(typeString).Should(Equal("RDSInventory.dbaas.redhat.com"))
-							namespacedNameString, nsnOk := instance.GetAnnotations()[ophandler.NamespacedNameAnnotation]
-							Expect(nsnOk).Should(BeTrue())
-							Expect(namespacedNameString).Should(Equal(testNamespace + "/" + inventoryName))
-							Expect(instance.Spec.Kubernetes.GroupKind.Kind).Should(Equal("DBInstance"))
-							Expect(instance.Spec.Kubernetes.GroupKind.Group).Should(Equal(rdsv1alpha1.GroupVersion.Group))
-							Expect(instance.Spec.Kubernetes.Metadata.Namespace).Should(Equal(testNamespace))
-							label, labelOk := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]
-							Expect(labelOk).Should(BeTrue())
-							Expect(label).Should(Equal("true"))
-						}
-						if instance, ok := dbInstancesMap["mock-db-instance-5"]; !ok {
-							return false
-						} else {
-							if instance.Name != "rhoda-adopted-db-instance-mock-db-instance-5" {
-								return false
-							}
-							typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
-							Expect(typeOk).Should(BeTrue())
-							Expect(typeString).Should(Equal("RDSInventory.dbaas.redhat.com"))
-							namespacedNameString, nsnOk := instance.GetAnnotations()[ophandler.NamespacedNameAnnotation]
-							Expect(nsnOk).Should(BeTrue())
-							Expect(namespacedNameString).Should(Equal(testNamespace + "/" + inventoryName))
-							Expect(instance.Spec.Kubernetes.GroupKind.Kind).Should(Equal("DBInstance"))
-							Expect(instance.Spec.Kubernetes.GroupKind.Group).Should(Equal(rdsv1alpha1.GroupVersion.Group))
-							Expect(instance.Spec.Kubernetes.Metadata.Namespace).Should(Equal(testNamespace))
-							label, labelOk := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]
-							Expect(labelOk).Should(BeTrue())
-							Expect(label).Should(Equal("true"))
-						}
-						return true
-					}, timeout).Should(BeTrue())
+							r, ok := rdsConfigMap.Data["AWS_REGION"]
+							Expect(ok).Should(BeTrue())
+							Expect(r).Should(Equal(region))
+							return true
+						}, timeout).Should(BeTrue())
 
-					By("checking if the password of adopted db instance is reset")
-					dbInstance3 := &rdsv1alpha1.DBInstance{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "db-instance-inventory-controller-3",
-							Namespace: testNamespace,
-						},
-					}
-					dbSecret3 := &v1.Secret{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "db-instance-inventory-controller-3-credentials",
-							Namespace: testNamespace,
-						},
-					}
-					Eventually(func() bool {
-						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance3), dbInstance3); err != nil {
-							return false
-						}
-						if dbInstance3.Spec.DBName == nil {
-							return false
-						}
-						if dbInstance3.Spec.MasterUsername == nil {
-							return false
-						}
-						if dbInstance3.Spec.MasterUserPassword == nil {
-							return false
-						}
-						Expect(dbInstance3.Spec.MasterUserPassword.Key).Should(Equal("password"))
-						Expect(dbInstance3.Spec.MasterUserPassword.Namespace).Should(Equal(testNamespace))
-						Expect(dbInstance3.Spec.MasterUserPassword.Name).Should(Equal("db-instance-inventory-controller-3-credentials"))
-						err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret3), dbSecret3)
-						Expect(err).ShouldNot(HaveOccurred())
-						v, ok := dbSecret3.Data["password"]
-						Expect(ok).Should(BeTrue())
-						Expect(len(v)).Should(BeNumerically("==", 12))
-						return true
-					}, timeout).Should(BeTrue())
-
-					By("checking if the username and password of adopted db instance is not reset when deleting")
-					dbInstance4 := &rdsv1alpha1.DBInstance{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "db-instance-inventory-controller-4",
-							Namespace: testNamespace,
-						},
-					}
-					dbSecret4 := &v1.Secret{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "db-instance-inventory-controller-4-credentials",
-							Namespace: testNamespace,
-						},
-					}
-					Consistently(func() bool {
-						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance4), dbInstance4); err != nil {
-							return false
-						}
-						if dbInstance4.Spec.DBName != nil {
-							return false
-						}
-						if dbInstance4.Spec.MasterUsername != nil {
-							return false
-						}
-						if dbInstance4.Spec.MasterUserPassword != nil {
-							return false
-						}
-						err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret4), dbSecret4)
-						if err == nil || !errors.IsNotFound(err) {
-							return false
-						}
-						return true
-					}, timeout).Should(BeTrue())
-
-					By("checking if the password of adopted db instance is not reset when not available")
-					dbInstance5 := &rdsv1alpha1.DBInstance{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "db-instance-inventory-controller-5",
-							Namespace: testNamespace,
-						},
-					}
-					dbSecret5 := &v1.Secret{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "db-instance-inventory-controller-5-credentials",
-							Namespace: testNamespace,
-						},
-					}
-					Eventually(func() bool {
-						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance5), dbInstance5); err != nil {
-							return false
-						}
-						if dbInstance5.Spec.DBName == nil {
-							return false
-						}
-						if dbInstance5.Spec.MasterUsername == nil {
-							return false
-						}
-						return true
-					}, timeout).Should(BeTrue())
-					Consistently(func() bool {
-						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance5), dbInstance5); err != nil {
-							return false
-						}
-						if dbInstance5.Spec.MasterUserPassword != nil {
-							return false
-						}
-						err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret5), dbSecret5)
-						if err == nil || !errors.IsNotFound(err) {
-							return false
-						}
-						return true
-					}, timeout).Should(BeTrue())
-				})
-
-				Context("when is ACK controller is scaled down", func() {
-					It("should scale the ACK controller up", func() {
+						By("checking if the RDS controller is started")
 						deployment := &appsv1.Deployment{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      "ack-rds-controller",
 								Namespace: testNamespace,
 							},
 						}
-
-						By("checking if the replica is 1 and update it to 0")
 						Eventually(func() bool {
 							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
 								return false
 							}
+							return *deployment.Spec.Replicas == 1 && deployment.Status.Replicas == 1 && deployment.Status.ReadyReplicas == 1
+						}, timeout).Should(BeTrue())
 
-							if deployment.Spec.Replicas == nil || *deployment.Spec.Replicas != 1 {
+						By("checking if DB instances are adopted")
+						Eventually(func() bool {
+							adoptedDBInstances := &ackv1alpha1.AdoptedResourceList{}
+							if err := k8sClient.List(ctx, adoptedDBInstances, client.InNamespace(testNamespace)); err != nil {
 								return false
 							}
+							if len(adoptedDBInstances.Items) < 4 {
+								return false
+							}
+							dbInstancesMap := map[string]ackv1alpha1.AdoptedResource{}
+							for i := range adoptedDBInstances.Items {
+								instance := adoptedDBInstances.Items[i]
+								dbInstancesMap[instance.Spec.AWS.NameOrID] = instance
+							}
 
-							deployment.Spec.Replicas = pointer.Int32(0)
-							if err := k8sClient.Update(ctx, deployment); err != nil {
+							if instance, ok := dbInstancesMap["mock-db-instance-1"]; !ok {
+								return false
+							} else {
+								if instance.Name != "rhoda-adopted-db-instance-mock-db-instance-1" {
+									return false
+								}
+								typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
+								Expect(typeOk).Should(BeTrue())
+								Expect(typeString).Should(Equal("RDSInventory.dbaas.redhat.com"))
+								namespacedNameString, nsnOk := instance.GetAnnotations()[ophandler.NamespacedNameAnnotation]
+								Expect(nsnOk).Should(BeTrue())
+								Expect(namespacedNameString).Should(Equal(testNamespace + "/" + inventoryName))
+								Expect(instance.Spec.Kubernetes.GroupKind.Kind).Should(Equal("DBInstance"))
+								Expect(instance.Spec.Kubernetes.GroupKind.Group).Should(Equal(rdsv1alpha1.GroupVersion.Group))
+								Expect(instance.Spec.Kubernetes.Metadata.Namespace).Should(Equal(testNamespace))
+								label, labelOk := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]
+								Expect(labelOk).Should(BeTrue())
+								Expect(label).Should(Equal("true"))
+							}
+							if instance, ok := dbInstancesMap["mock-db-instance-2"]; !ok {
+								return false
+							} else {
+								if instance.Name != "rhoda-adopted-db-instance-mock-db-instance-2" {
+									return false
+								}
+								typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
+								Expect(typeOk).Should(BeTrue())
+								Expect(typeString).Should(Equal("RDSInventory.dbaas.redhat.com"))
+								namespacedNameString, nsnOk := instance.GetAnnotations()[ophandler.NamespacedNameAnnotation]
+								Expect(nsnOk).Should(BeTrue())
+								Expect(namespacedNameString).Should(Equal(testNamespace + "/" + inventoryName))
+								Expect(instance.Spec.Kubernetes.GroupKind.Kind).Should(Equal("DBInstance"))
+								Expect(instance.Spec.Kubernetes.GroupKind.Group).Should(Equal(rdsv1alpha1.GroupVersion.Group))
+								Expect(instance.Spec.Kubernetes.Metadata.Namespace).Should(Equal(testNamespace))
+								label, labelOk := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]
+								Expect(labelOk).Should(BeTrue())
+								Expect(label).Should(Equal("true"))
+							}
+							if instance, ok := dbInstancesMap["mock-db-instance-3"]; !ok {
+								return false
+							} else {
+								if instance.Name != "rhoda-adopted-db-instance-mock-db-instance-3" {
+									return false
+								}
+								typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
+								Expect(typeOk).Should(BeTrue())
+								Expect(typeString).Should(Equal("RDSInventory.dbaas.redhat.com"))
+								namespacedNameString, nsnOk := instance.GetAnnotations()[ophandler.NamespacedNameAnnotation]
+								Expect(nsnOk).Should(BeTrue())
+								Expect(namespacedNameString).Should(Equal(testNamespace + "/" + inventoryName))
+								Expect(instance.Spec.Kubernetes.GroupKind.Kind).Should(Equal("DBInstance"))
+								Expect(instance.Spec.Kubernetes.GroupKind.Group).Should(Equal(rdsv1alpha1.GroupVersion.Group))
+								Expect(instance.Spec.Kubernetes.Metadata.Namespace).Should(Equal(testNamespace))
+								label, labelOk := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]
+								Expect(labelOk).Should(BeTrue())
+								Expect(label).Should(Equal("true"))
+							}
+							if instance, ok := dbInstancesMap["mock-db-instance-4"]; !ok {
+								return false
+							} else {
+								if instance.Name != "rhoda-adopted-db-instance-mock-db-instance-4" {
+									return false
+								}
+								typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
+								Expect(typeOk).Should(BeTrue())
+								Expect(typeString).Should(Equal("RDSInventory.dbaas.redhat.com"))
+								namespacedNameString, nsnOk := instance.GetAnnotations()[ophandler.NamespacedNameAnnotation]
+								Expect(nsnOk).Should(BeTrue())
+								Expect(namespacedNameString).Should(Equal(testNamespace + "/" + inventoryName))
+								Expect(instance.Spec.Kubernetes.GroupKind.Kind).Should(Equal("DBInstance"))
+								Expect(instance.Spec.Kubernetes.GroupKind.Group).Should(Equal(rdsv1alpha1.GroupVersion.Group))
+								Expect(instance.Spec.Kubernetes.Metadata.Namespace).Should(Equal(testNamespace))
+								label, labelOk := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]
+								Expect(labelOk).Should(BeTrue())
+								Expect(label).Should(Equal("true"))
+							}
+							if _, ok := dbInstancesMap["mock-db-instance-5"]; ok {
+								return false
+							}
+							if _, ok := dbInstancesMap["mock-db-cluster-1"]; ok {
+								return false
+							}
+							if _, ok := dbInstancesMap["mock-db-cluster-2"]; ok {
 								return false
 							}
 							return true
 						}, timeout).Should(BeTrue())
 
-						By("checking if the replica is updated to 1 again")
+						assertResourceCreation(mockDBInstance1)()
+						assertResourceCreation(mockDBInstance2)()
+						assertResourceCreation(mockDBInstance3)()
+						assertResourceCreation(mockDBInstance4)()
 						Eventually(func() bool {
-							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
+							clusterDBInstanceList := &rdsv1alpha1.DBInstanceList{}
+							if e := k8sClient.List(ctx, clusterDBInstanceList, client.InNamespace(inventory.Namespace)); e != nil {
 								return false
 							}
-							if deployment.Spec.Replicas == nil || *deployment.Spec.Replicas != 1 {
+							dbInstanceMap := map[string]rdsv1alpha1.DBInstance{}
+							for _, dbInstance := range clusterDBInstanceList.Items {
+								dbInstanceMap[*dbInstance.Spec.DBInstanceIdentifier] = dbInstance
+							}
+							if _, ok := dbInstanceMap["mock-db-instance-1"]; !ok {
+								return false
+							}
+							if _, ok := dbInstanceMap["mock-db-instance-2"]; !ok {
+								return false
+							}
+							if _, ok := dbInstanceMap["mock-db-instance-3"]; !ok {
+								return false
+							}
+							if _, ok := dbInstanceMap["mock-db-instance-4"]; !ok {
 								return false
 							}
 							return true
 						}, timeout).Should(BeTrue())
+
+						By("checking Inventory status")
+						inv := &rdsdbaasv1alpha1.RDSInventory{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      inventoryName,
+								Namespace: testNamespace,
+							},
+						}
+						Eventually(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(inv), inv); err != nil {
+								return false
+							}
+							condition := apimeta.FindStatusCondition(inv.Status.Conditions, "SpecSynced")
+							if condition == nil || condition.Status != metav1.ConditionTrue || condition.Reason != "SyncOK" {
+								return false
+							}
+							if len(inv.Status.Instances) < 10 {
+								return false
+							}
+							instancesMap := map[string]dbaasv1alpha1.Instance{}
+							for i := range inv.Status.Instances {
+								ins := inv.Status.Instances[i]
+								instancesMap[ins.InstanceID] = ins
+							}
+							if ins, ok := instancesMap[*dbInstance1.Spec.DBInstanceIdentifier]; !ok {
+								return false
+							} else {
+								Expect(ins.Name).Should(Equal(dbInstance1.Name))
+								s, ok := ins.InstanceInfo["dbInstanceStatus"]
+								Expect(ok).Should(BeTrue())
+								Expect(s).Should(Equal(*dbInstance1.Status.DBInstanceStatus))
+							}
+							if ins, ok := instancesMap[*dbInstance2.Spec.DBInstanceIdentifier]; !ok {
+								return false
+							} else {
+								Expect(ins.Name).Should(Equal(dbInstance2.Name))
+								s, ok := ins.InstanceInfo["dbInstanceStatus"]
+								Expect(ok).Should(BeTrue())
+								Expect(s).Should(Equal(*dbInstance2.Status.DBInstanceStatus))
+							}
+							if ins, ok := instancesMap[*dbInstance3.Spec.DBInstanceIdentifier]; !ok {
+								return false
+							} else {
+								Expect(ins.Name).Should(Equal(dbInstance3.Name))
+								s, ok := ins.InstanceInfo["dbInstanceStatus"]
+								Expect(ok).Should(BeTrue())
+								Expect(s).Should(Equal(*dbInstance3.Status.DBInstanceStatus))
+							}
+							if ins, ok := instancesMap[*dbInstance4.Spec.DBInstanceIdentifier]; !ok {
+								return false
+							} else {
+								Expect(ins.Name).Should(Equal(dbInstance4.Name))
+								s, ok := ins.InstanceInfo["dbInstanceStatus"]
+								Expect(ok).Should(BeTrue())
+								Expect(s).Should(Equal(*dbInstance4.Status.DBInstanceStatus))
+							}
+							if ins, ok := instancesMap[*dbInstance5.Spec.DBInstanceIdentifier]; !ok {
+								return false
+							} else {
+								Expect(ins.Name).Should(Equal(dbInstance5.Name))
+								s, ok := ins.InstanceInfo["dbInstanceStatus"]
+								Expect(ok).Should(BeTrue())
+								Expect(s).Should(Equal(*dbInstance5.Status.DBInstanceStatus))
+							}
+							return true
+						}, timeout).Should(BeTrue())
+
+						By("checking if the password of adopted db instance is reset")
+						dbInstance3 := &rdsv1alpha1.DBInstance{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-3",
+								Namespace: testNamespace,
+							},
+						}
+						dbSecret3 := &v1.Secret{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-3-credentials",
+								Namespace: testNamespace,
+							},
+						}
+						Eventually(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance3), dbInstance3); err != nil {
+								return false
+							}
+							if dbInstance3.Spec.DBName == nil {
+								return false
+							}
+							if dbInstance3.Spec.MasterUsername == nil {
+								return false
+							}
+							if dbInstance3.Spec.MasterUserPassword == nil {
+								return false
+							}
+							Expect(dbInstance3.Spec.MasterUserPassword.Key).Should(Equal("password"))
+							Expect(dbInstance3.Spec.MasterUserPassword.Namespace).Should(Equal(testNamespace))
+							Expect(dbInstance3.Spec.MasterUserPassword.Name).Should(Equal("db-instance-inventory-controller-3-credentials"))
+							err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret3), dbSecret3)
+							Expect(err).ShouldNot(HaveOccurred())
+							v, ok := dbSecret3.Data["password"]
+							Expect(ok).Should(BeTrue())
+							Expect(len(v)).Should(BeNumerically("==", 12))
+							return true
+						}, timeout).Should(BeTrue())
+
+						By("checking if the username and password of adopted db instance is not reset when deleting")
+						dbInstance4 := &rdsv1alpha1.DBInstance{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-4",
+								Namespace: testNamespace,
+							},
+						}
+						dbSecret4 := &v1.Secret{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-4-credentials",
+								Namespace: testNamespace,
+							},
+						}
+						Consistently(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance4), dbInstance4); err != nil {
+								return false
+							}
+							if dbInstance4.Spec.DBName != nil {
+								return false
+							}
+							if dbInstance4.Spec.MasterUsername != nil {
+								return false
+							}
+							if dbInstance4.Spec.MasterUserPassword != nil {
+								return false
+							}
+							err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret4), dbSecret4)
+							if err == nil || !errors.IsNotFound(err) {
+								return false
+							}
+							return true
+						}, timeout).Should(BeTrue())
+
+						By("checking if the password of adopted db instance is not reset when not available")
+						dbInstance5 := &rdsv1alpha1.DBInstance{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-5",
+								Namespace: testNamespace,
+							},
+						}
+						dbSecret5 := &v1.Secret{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-5-credentials",
+								Namespace: testNamespace,
+							},
+						}
+						Eventually(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance5), dbInstance5); err != nil {
+								return false
+							}
+							if dbInstance5.Spec.DBName == nil {
+								return false
+							}
+							if dbInstance5.Spec.MasterUsername == nil {
+								return false
+							}
+							return true
+						}, timeout).Should(BeTrue())
+						Consistently(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance5), dbInstance5); err != nil {
+								return false
+							}
+							if dbInstance5.Spec.MasterUserPassword != nil {
+								return false
+							}
+							err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret5), dbSecret5)
+							if err == nil || !errors.IsNotFound(err) {
+								return false
+							}
+							return true
+						}, timeout).Should(BeTrue())
+
+						By("checking if the username and password of adopted db instance is not reset when the db instance is in cluster")
+						dbInstance6 := &rdsv1alpha1.DBInstance{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-6",
+								Namespace: testNamespace,
+							},
+						}
+						dbSecret6 := &v1.Secret{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-6-credentials",
+								Namespace: testNamespace,
+							},
+						}
+						Consistently(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance6), dbInstance6); err != nil {
+								return false
+							}
+							if dbInstance6.Spec.DBName != nil {
+								return false
+							}
+							if dbInstance6.Spec.MasterUsername != nil {
+								return false
+							}
+							if dbInstance6.Spec.MasterUserPassword != nil {
+								return false
+							}
+							err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret6), dbSecret6)
+							if err == nil || !errors.IsNotFound(err) {
+								return false
+							}
+							return true
+						}, timeout).Should(BeTrue())
+					})
+
+					Context("when is ACK controller is scaled down", func() {
+						It("should scale the ACK controller up", func() {
+							deployment := &appsv1.Deployment{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:      "ack-rds-controller",
+									Namespace: testNamespace,
+								},
+							}
+
+							By("checking if the replica is 1 and update it to 0")
+							Eventually(func() bool {
+								if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
+									return false
+								}
+
+								if deployment.Spec.Replicas == nil || *deployment.Spec.Replicas != 1 {
+									return false
+								}
+
+								deployment.Spec.Replicas = pointer.Int32(0)
+								if err := k8sClient.Update(ctx, deployment); err != nil {
+									return false
+								}
+								return true
+							}, timeout).Should(BeTrue())
+
+							By("checking if the replica is updated to 1 again")
+							Eventually(func() bool {
+								if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
+									return false
+								}
+								if deployment.Spec.Replicas == nil || *deployment.Spec.Replicas != 1 {
+									return false
+								}
+								return true
+							}, timeout).Should(BeTrue())
+						})
 					})
 				})
 			})

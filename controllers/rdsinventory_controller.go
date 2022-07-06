@@ -422,10 +422,14 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			for i := range awsDBInstances {
 				dbInstance := awsDBInstances[i]
 				awsDBInstanceMap[*dbInstance.DBInstanceIdentifier] = dbInstance
+				if dbInstance.DBClusterIdentifier != nil {
+					continue
+				}
 				if dbInstance.DBInstanceStatus != nil && *dbInstance.DBInstanceStatus == "deleting" {
 					continue
 				}
 				if _, ok := dbInstanceMap[*dbInstance.DBInstanceIdentifier]; !ok {
+					adoptingResource = true
 					if _, ok := adoptedDBInstanceMap[*dbInstance.DBInstanceIdentifier]; !ok {
 						adoptedDBInstance := createAdoptedResource(&dbInstance, &inventory)
 						if e := ophandler.SetOwnerAnnotations(&inventory, adoptedDBInstance); e != nil {
@@ -438,7 +442,6 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 							returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageAdoptInstanceError)
 							return true, false
 						}
-						adoptingResource = true
 					}
 				}
 			}
@@ -460,6 +463,9 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		waitForAdoptedResource := false
 		for i := range adoptedDBInstanceList.Items {
 			adoptedDBInstance := adoptedDBInstanceList.Items[i]
+			if adoptedDBInstance.Spec.DBClusterIdentifier != nil {
+				continue
+			}
 			if adoptedDBInstance.Status.DBInstanceStatus != nil && *adoptedDBInstance.Status.DBInstanceStatus == "deleting" {
 				continue
 			}
@@ -504,6 +510,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				input := &rds.ModifyDBInstanceInput{
 					DBInstanceIdentifier: adoptedDBInstance.Spec.DBInstanceIdentifier,
 					MasterUserPassword:   pointer.String(string(password)),
+					ApplyImmediately:     true,
 				}
 				if _, e := modifyDBInstance.ModifyDBInstance(ctx, input); e != nil {
 					logger.Error(e, "Failed to update credentials of the adopted DB Instance", "DB Instance", adoptedDBInstance)

@@ -53,7 +53,7 @@ var dbInstances = []*rds.DescribeDBInstancesOutput{
 			},
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-instance-5"),
-				DBInstanceStatus:     pointer.String("available"),
+				DBInstanceStatus:     pointer.String("deleting"),
 			},
 		},
 	},
@@ -66,7 +66,7 @@ var dbInstances = []*rds.DescribeDBInstancesOutput{
 				MasterUsername:       pointer.String("test-username"),
 			},
 			{
-				DBInstanceIdentifier: pointer.String("mock-adpoted-db-instance-4"),
+				DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-4"),
 				DBInstanceStatus:     pointer.String("deleting"),
 				DBName:               pointer.String("test-dbname"),
 				MasterUsername:       pointer.String("test-username"),
@@ -76,6 +76,18 @@ var dbInstances = []*rds.DescribeDBInstancesOutput{
 				DBInstanceStatus:     pointer.String("creating"),
 				DBName:               pointer.String("test-dbname"),
 				MasterUsername:       pointer.String("test-username"),
+			},
+		},
+	},
+	{
+		DBInstances: []types.DBInstance{
+			{
+				DBInstanceIdentifier: pointer.String("mock-db-cluster-1"),
+				DBInstanceStatus:     pointer.String("available"),
+			},
+			{
+				DBInstanceIdentifier: pointer.String("mock-db-cluster-2"),
+				DBInstanceStatus:     pointer.String("available"),
 			},
 		},
 	},
