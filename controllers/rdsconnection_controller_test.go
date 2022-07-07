@@ -116,7 +116,7 @@ var _ = Describe("RDSConnectionController", func() {
 			})
 
 			Context("when Inventory is ready", func() {
-				accessKey := "AKIAIOSFODNN7EXAMPLEINVENTORYCONTROLLER"
+				accessKey := "AKIAIOSFODNN7EXAMPLECONNECTIONCONTROLLER"
 				secretKey := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 				region := "us-east-1"
 
@@ -472,7 +472,7 @@ var _ = Describe("RDSConnectionController", func() {
 
 	Context("when Inventory is created and ready", func() {
 		credentialName := "credentials-ref-jdbc-url-connection-controller"
-		accessKey := "AKIAIOSFODNN7EXAMPLEINVENTORYCONTROLLER"
+		accessKey := "AKIAIOSFODNN7EXAMPLECONNECTIONCONTROLLER"
 		secretKey := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 		region := "us-east-1"
 

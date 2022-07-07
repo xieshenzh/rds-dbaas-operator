@@ -281,3 +281,15 @@ func assertResourceDeletion(object client.Object) func() {
 		}, timeout).Should(BeTrue())
 	}
 }
+
+func assertResourceDeletionIfExist(object client.Object) func() {
+	return func() {
+		By("checking if resource exists")
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(object), object)
+		if err != nil && errors.IsNotFound(err) {
+			return
+		}
+
+		assertResourceDeletion(object)()
+	}
+}

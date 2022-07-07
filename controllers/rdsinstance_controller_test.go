@@ -137,7 +137,7 @@ var _ = Describe("RDSInstanceController", func() {
 			})
 
 			Context("when Inventory is ready", func() {
-				accessKey := "AKIAIOSFODNN7EXAMPLEINVENTORYCONTROLLER"
+				accessKey := "AKIAIOSFODNN7EXAMPLEINSTANCECONTROLLER"
 				secretKey := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 				region := "us-east-1"
 
