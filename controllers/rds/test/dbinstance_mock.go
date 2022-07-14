@@ -91,6 +91,45 @@ var dbInstances = []*rds.DescribeDBInstancesOutput{
 			},
 		},
 	},
+	{
+		DBInstances: []types.DBInstance{
+			{
+				DBInstanceIdentifier: pointer.String("mock-db-aurora-1"),
+				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("aurora"),
+			},
+			{
+				DBInstanceIdentifier: pointer.String("mock-db-aurora-2"),
+				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("aurora-mysql"),
+			},
+			{
+				DBInstanceIdentifier: pointer.String("mock-db-aurora-3"),
+				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("aurora-postgresql"),
+			},
+			{
+				DBInstanceIdentifier: pointer.String("mock-db-custom-1"),
+				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("custom-oracle-ee"),
+			},
+			{
+				DBInstanceIdentifier: pointer.String("mock-db-custom-2"),
+				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("custom-sqlserver-ee"),
+			},
+			{
+				DBInstanceIdentifier: pointer.String("mock-db-custom-3"),
+				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("custom-sqlserver-se"),
+			},
+			{
+				DBInstanceIdentifier: pointer.String("mock-db-custom-4"),
+				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("custom-sqlserver-web"),
+			},
+		},
+	},
 }
 
 type mockDescribeDBInstancesPaginator struct {

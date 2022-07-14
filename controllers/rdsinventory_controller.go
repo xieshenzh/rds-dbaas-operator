@@ -422,6 +422,13 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			for i := range awsDBInstances {
 				dbInstance := awsDBInstances[i]
 				awsDBInstanceMap[*dbInstance.DBInstanceIdentifier] = dbInstance
+				if dbInstance.Engine != nil {
+					switch *dbInstance.Engine {
+					case aurora, auroraMysql, auroraPostgresql, customOracleEe, customSqlserverEe, customSqlserverSe, customSqlserverWeb:
+						continue
+					default:
+					}
+				}
 				if dbInstance.DBClusterIdentifier != nil {
 					continue
 				}
@@ -463,6 +470,13 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		waitForAdoptedResource := false
 		for i := range adoptedDBInstanceList.Items {
 			adoptedDBInstance := adoptedDBInstanceList.Items[i]
+			if adoptedDBInstance.Spec.Engine != nil {
+				switch *adoptedDBInstance.Spec.Engine {
+				case aurora, auroraMysql, auroraPostgresql, customOracleEe, customSqlserverEe, customSqlserverSe, customSqlserverWeb:
+					continue
+				default:
+				}
+			}
 			if adoptedDBInstance.Spec.DBClusterIdentifier != nil {
 				continue
 			}

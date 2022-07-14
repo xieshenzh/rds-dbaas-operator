@@ -275,6 +275,195 @@ var _ = Describe("RDSInventoryController", func() {
 				}, timeout).Should(BeTrue())
 			})
 
+			dbInstance7 := &rdsv1alpha1.DBInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "db-instance-inventory-controller-7",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"rds.dbaas.redhat.com/adopted": "true",
+					},
+				},
+				Spec: rdsv1alpha1.DBInstanceSpec{
+					Engine:               pointer.String("aurora"),
+					DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-7"),
+					DBInstanceClass:      pointer.String("db.t3.small"),
+				},
+			}
+			BeforeEach(assertResourceCreation(dbInstance7))
+			AfterEach(assertResourceDeletion(dbInstance7))
+			BeforeEach(func() {
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance7), dbInstance7); err != nil {
+						return false
+					}
+					dbInstance7.Status.DBInstanceStatus = pointer.String("available")
+					err := k8sClient.Status().Update(ctx, dbInstance7)
+					return err == nil
+				}, timeout).Should(BeTrue())
+			})
+
+			dbInstance8 := &rdsv1alpha1.DBInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "db-instance-inventory-controller-8",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"rds.dbaas.redhat.com/adopted": "true",
+					},
+				},
+				Spec: rdsv1alpha1.DBInstanceSpec{
+					Engine:               pointer.String("aurora-mysql"),
+					DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-8"),
+					DBInstanceClass:      pointer.String("db.t3.small"),
+				},
+			}
+			BeforeEach(assertResourceCreation(dbInstance8))
+			AfterEach(assertResourceDeletion(dbInstance8))
+			BeforeEach(func() {
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance8), dbInstance8); err != nil {
+						return false
+					}
+					dbInstance8.Status.DBInstanceStatus = pointer.String("available")
+					err := k8sClient.Status().Update(ctx, dbInstance8)
+					return err == nil
+				}, timeout).Should(BeTrue())
+			})
+
+			dbInstance9 := &rdsv1alpha1.DBInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "db-instance-inventory-controller-9",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"rds.dbaas.redhat.com/adopted": "true",
+					},
+				},
+				Spec: rdsv1alpha1.DBInstanceSpec{
+					Engine:               pointer.String("aurora-postgresql"),
+					DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-9"),
+					DBInstanceClass:      pointer.String("db.t3.small"),
+				},
+			}
+			BeforeEach(assertResourceCreation(dbInstance9))
+			AfterEach(assertResourceDeletion(dbInstance9))
+			BeforeEach(func() {
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance9), dbInstance9); err != nil {
+						return false
+					}
+					dbInstance9.Status.DBInstanceStatus = pointer.String("available")
+					err := k8sClient.Status().Update(ctx, dbInstance9)
+					return err == nil
+				}, timeout).Should(BeTrue())
+			})
+
+			dbInstance10 := &rdsv1alpha1.DBInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "db-instance-inventory-controller-10",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"rds.dbaas.redhat.com/adopted": "true",
+					},
+				},
+				Spec: rdsv1alpha1.DBInstanceSpec{
+					Engine:               pointer.String("custom-oracle-ee"),
+					DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-10"),
+					DBInstanceClass:      pointer.String("db.t3.small"),
+				},
+			}
+			BeforeEach(assertResourceCreation(dbInstance10))
+			AfterEach(assertResourceDeletion(dbInstance10))
+			BeforeEach(func() {
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance10), dbInstance10); err != nil {
+						return false
+					}
+					dbInstance10.Status.DBInstanceStatus = pointer.String("available")
+					err := k8sClient.Status().Update(ctx, dbInstance10)
+					return err == nil
+				}, timeout).Should(BeTrue())
+			})
+
+			dbInstance11 := &rdsv1alpha1.DBInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "db-instance-inventory-controller-11",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"rds.dbaas.redhat.com/adopted": "true",
+					},
+				},
+				Spec: rdsv1alpha1.DBInstanceSpec{
+					Engine:               pointer.String("custom-sqlserver-ee"),
+					DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-11"),
+					DBInstanceClass:      pointer.String("db.t3.small"),
+				},
+			}
+			BeforeEach(assertResourceCreation(dbInstance11))
+			AfterEach(assertResourceDeletion(dbInstance11))
+			BeforeEach(func() {
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance11), dbInstance11); err != nil {
+						return false
+					}
+					dbInstance11.Status.DBInstanceStatus = pointer.String("available")
+					err := k8sClient.Status().Update(ctx, dbInstance11)
+					return err == nil
+				}, timeout).Should(BeTrue())
+			})
+
+			dbInstance12 := &rdsv1alpha1.DBInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "db-instance-inventory-controller-12",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"rds.dbaas.redhat.com/adopted": "true",
+					},
+				},
+				Spec: rdsv1alpha1.DBInstanceSpec{
+					Engine:               pointer.String("custom-sqlserver-se"),
+					DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-12"),
+					DBInstanceClass:      pointer.String("db.t3.small"),
+				},
+			}
+			BeforeEach(assertResourceCreation(dbInstance12))
+			AfterEach(assertResourceDeletion(dbInstance12))
+			BeforeEach(func() {
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance12), dbInstance12); err != nil {
+						return false
+					}
+					dbInstance12.Status.DBInstanceStatus = pointer.String("available")
+					err := k8sClient.Status().Update(ctx, dbInstance12)
+					return err == nil
+				}, timeout).Should(BeTrue())
+			})
+
+			dbInstance13 := &rdsv1alpha1.DBInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "db-instance-inventory-controller-13",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"rds.dbaas.redhat.com/adopted": "true",
+					},
+				},
+				Spec: rdsv1alpha1.DBInstanceSpec{
+					Engine:               pointer.String("custom-sqlserver-web"),
+					DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-13"),
+					DBInstanceClass:      pointer.String("db.t3.small"),
+				},
+			}
+			BeforeEach(assertResourceCreation(dbInstance13))
+			AfterEach(assertResourceDeletion(dbInstance13))
+			BeforeEach(func() {
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance13), dbInstance13); err != nil {
+						return false
+					}
+					dbInstance13.Status.DBInstanceStatus = pointer.String("available")
+					err := k8sClient.Status().Update(ctx, dbInstance13)
+					return err == nil
+				}, timeout).Should(BeTrue())
+			})
+
 			Context("when mocking RDS controller adopting resources", func() {
 				mockDBInstance1 := &rdsv1alpha1.DBInstance{
 					ObjectMeta: metav1.ObjectMeta{
@@ -493,6 +682,27 @@ var _ = Describe("RDSInventoryController", func() {
 								return false
 							}
 							if _, ok := dbInstancesMap["mock-db-cluster-2"]; ok {
+								return false
+							}
+							if _, ok := dbInstancesMap["mock-db-aurora-1"]; ok {
+								return false
+							}
+							if _, ok := dbInstancesMap["mock-db-aurora-2"]; ok {
+								return false
+							}
+							if _, ok := dbInstancesMap["mock-db-aurora-3"]; ok {
+								return false
+							}
+							if _, ok := dbInstancesMap["mock-db-custom-1"]; ok {
+								return false
+							}
+							if _, ok := dbInstancesMap["mock-db-custom-2"]; ok {
+								return false
+							}
+							if _, ok := dbInstancesMap["mock-db-custom-3"]; ok {
+								return false
+							}
+							if _, ok := dbInstancesMap["mock-db-custom-4"]; ok {
 								return false
 							}
 							return true
@@ -728,6 +938,231 @@ var _ = Describe("RDSInventoryController", func() {
 								return false
 							}
 							err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret6), dbSecret6)
+							if err == nil || !errors.IsNotFound(err) {
+								return false
+							}
+							return true
+						}, timeout).Should(BeTrue())
+
+						By("checking if the username and password of adopted db instance is not reset when the db instance engine is aurora or custom")
+						dbInstance7 := &rdsv1alpha1.DBInstance{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-7",
+								Namespace: testNamespace,
+							},
+						}
+						dbSecret7 := &v1.Secret{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-7-credentials",
+								Namespace: testNamespace,
+							},
+						}
+						Consistently(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance7), dbInstance7); err != nil {
+								return false
+							}
+							if dbInstance7.Spec.DBName != nil {
+								return false
+							}
+							if dbInstance7.Spec.MasterUsername != nil {
+								return false
+							}
+							if dbInstance7.Spec.MasterUserPassword != nil {
+								return false
+							}
+							err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret7), dbSecret7)
+							if err == nil || !errors.IsNotFound(err) {
+								return false
+							}
+							return true
+						}, timeout).Should(BeTrue())
+
+						dbInstance8 := &rdsv1alpha1.DBInstance{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-8",
+								Namespace: testNamespace,
+							},
+						}
+						dbSecret8 := &v1.Secret{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-8-credentials",
+								Namespace: testNamespace,
+							},
+						}
+						Consistently(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance8), dbInstance8); err != nil {
+								return false
+							}
+							if dbInstance8.Spec.DBName != nil {
+								return false
+							}
+							if dbInstance8.Spec.MasterUsername != nil {
+								return false
+							}
+							if dbInstance8.Spec.MasterUserPassword != nil {
+								return false
+							}
+							err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret8), dbSecret8)
+							if err == nil || !errors.IsNotFound(err) {
+								return false
+							}
+							return true
+						}, timeout).Should(BeTrue())
+
+						dbInstance9 := &rdsv1alpha1.DBInstance{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-9",
+								Namespace: testNamespace,
+							},
+						}
+						dbSecret9 := &v1.Secret{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-9-credentials",
+								Namespace: testNamespace,
+							},
+						}
+						Consistently(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance9), dbInstance9); err != nil {
+								return false
+							}
+							if dbInstance9.Spec.DBName != nil {
+								return false
+							}
+							if dbInstance9.Spec.MasterUsername != nil {
+								return false
+							}
+							if dbInstance9.Spec.MasterUserPassword != nil {
+								return false
+							}
+							err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret9), dbSecret9)
+							if err == nil || !errors.IsNotFound(err) {
+								return false
+							}
+							return true
+						}, timeout).Should(BeTrue())
+
+						dbInstance10 := &rdsv1alpha1.DBInstance{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-10",
+								Namespace: testNamespace,
+							},
+						}
+						dbSecret10 := &v1.Secret{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-10-credentials",
+								Namespace: testNamespace,
+							},
+						}
+						Consistently(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance10), dbInstance10); err != nil {
+								return false
+							}
+							if dbInstance10.Spec.DBName != nil {
+								return false
+							}
+							if dbInstance10.Spec.MasterUsername != nil {
+								return false
+							}
+							if dbInstance10.Spec.MasterUserPassword != nil {
+								return false
+							}
+							err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret10), dbSecret10)
+							if err == nil || !errors.IsNotFound(err) {
+								return false
+							}
+							return true
+						}, timeout).Should(BeTrue())
+
+						dbInstance11 := &rdsv1alpha1.DBInstance{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-11",
+								Namespace: testNamespace,
+							},
+						}
+						dbSecret11 := &v1.Secret{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-11-credentials",
+								Namespace: testNamespace,
+							},
+						}
+						Consistently(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance11), dbInstance11); err != nil {
+								return false
+							}
+							if dbInstance11.Spec.DBName != nil {
+								return false
+							}
+							if dbInstance11.Spec.MasterUsername != nil {
+								return false
+							}
+							if dbInstance11.Spec.MasterUserPassword != nil {
+								return false
+							}
+							err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret11), dbSecret11)
+							if err == nil || !errors.IsNotFound(err) {
+								return false
+							}
+							return true
+						}, timeout).Should(BeTrue())
+
+						dbInstance12 := &rdsv1alpha1.DBInstance{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-12",
+								Namespace: testNamespace,
+							},
+						}
+						dbSecret12 := &v1.Secret{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-12-credentials",
+								Namespace: testNamespace,
+							},
+						}
+						Consistently(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance12), dbInstance12); err != nil {
+								return false
+							}
+							if dbInstance12.Spec.DBName != nil {
+								return false
+							}
+							if dbInstance12.Spec.MasterUsername != nil {
+								return false
+							}
+							if dbInstance12.Spec.MasterUserPassword != nil {
+								return false
+							}
+							err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret12), dbSecret12)
+							if err == nil || !errors.IsNotFound(err) {
+								return false
+							}
+							return true
+						}, timeout).Should(BeTrue())
+
+						dbInstance13 := &rdsv1alpha1.DBInstance{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-13",
+								Namespace: testNamespace,
+							},
+						}
+						dbSecret13 := &v1.Secret{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-13-credentials",
+								Namespace: testNamespace,
+							},
+						}
+						Consistently(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance13), dbInstance13); err != nil {
+								return false
+							}
+							if dbInstance13.Spec.DBName != nil {
+								return false
+							}
+							if dbInstance13.Spec.MasterUsername != nil {
+								return false
+							}
+							if dbInstance13.Spec.MasterUserPassword != nil {
+								return false
+							}
+							err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret13), dbSecret13)
 							if err == nil || !errors.IsNotFound(err) {
 								return false
 							}
