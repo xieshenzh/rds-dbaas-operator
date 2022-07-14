@@ -164,7 +164,7 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			returnError(e, connectionStatusReasonBackendError, connectionStatusMessageGetInstanceError)
 			return true
 		}
-		if *dbInstance.Status.DBInstanceStatus != "available" {
+		if dbInstance.Status.DBInstanceStatus == nil || *dbInstance.Status.DBInstanceStatus != "available" {
 			e := fmt.Errorf("instance %s not ready", connection.Spec.InstanceID)
 			logger.Error(e, "DB Instance not ready")
 			returnError(e, connectionStatusReasonUnreachable, connectionStatusMessageInstanceNotReady)

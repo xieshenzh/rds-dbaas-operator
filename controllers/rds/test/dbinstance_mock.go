@@ -28,20 +28,26 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
 )
 
-var dbInstances = []*rds.DescribeDBInstancesOutput{
+var inventoryTestDBInstances = []*rds.DescribeDBInstancesOutput{
 	{
 		DBInstances: []types.DBInstance{
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-instance-1"),
 				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("postgres"),
+				DBInstanceArn:        pointer.String("mock-db-instance-1"),
 			},
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-instance-2"),
 				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("postgres"),
+				DBInstanceArn:        pointer.String("mock-db-instance-2"),
 			},
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-instance-3"),
 				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("postgres"),
+				DBInstanceArn:        pointer.String("mock-db-instance-3"),
 			},
 		},
 	},
@@ -50,10 +56,14 @@ var dbInstances = []*rds.DescribeDBInstancesOutput{
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-instance-4"),
 				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("postgres"),
+				DBInstanceArn:        pointer.String("mock-db-instance-4"),
 			},
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-instance-5"),
 				DBInstanceStatus:     pointer.String("deleting"),
+				Engine:               pointer.String("mysql"),
+				DBInstanceArn:        pointer.String("mock-db-instance-5"),
 			},
 		},
 	},
@@ -62,20 +72,34 @@ var dbInstances = []*rds.DescribeDBInstancesOutput{
 			{
 				DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-3"),
 				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("mariadb"),
 				DBName:               pointer.String("test-dbname"),
 				MasterUsername:       pointer.String("test-username"),
+				DBInstanceArn:        pointer.String("mock-adopted-db-instance-3"),
 			},
 			{
 				DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-4"),
 				DBInstanceStatus:     pointer.String("deleting"),
+				Engine:               pointer.String("postgres"),
 				DBName:               pointer.String("test-dbname"),
 				MasterUsername:       pointer.String("test-username"),
+				DBInstanceArn:        pointer.String("mock-adopted-db-instance-4"),
 			},
 			{
 				DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-5"),
 				DBInstanceStatus:     pointer.String("creating"),
+				Engine:               pointer.String("mysql"),
 				DBName:               pointer.String("test-dbname"),
 				MasterUsername:       pointer.String("test-username"),
+				DBInstanceArn:        pointer.String("mock-adopted-db-instance-5"),
+			},
+			{
+				DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-15"),
+				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("mysql"),
+				DBName:               pointer.String("test-dbname"),
+				MasterUsername:       pointer.String("test-username"),
+				DBInstanceArn:        pointer.String("mock-adopted-db-instance-15-0"),
 			},
 		},
 	},
@@ -84,10 +108,14 @@ var dbInstances = []*rds.DescribeDBInstancesOutput{
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-cluster-1"),
 				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("mysql"),
+				DBInstanceArn:        pointer.String("mock-db-cluster-1"),
 			},
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-cluster-2"),
 				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("postgres"),
+				DBInstanceArn:        pointer.String("mock-db-cluster-2"),
 			},
 		},
 	},
@@ -97,36 +125,68 @@ var dbInstances = []*rds.DescribeDBInstancesOutput{
 				DBInstanceIdentifier: pointer.String("mock-db-aurora-1"),
 				DBInstanceStatus:     pointer.String("available"),
 				Engine:               pointer.String("aurora"),
+				DBInstanceArn:        pointer.String("mock-db-aurora-1"),
 			},
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-aurora-2"),
 				DBInstanceStatus:     pointer.String("available"),
 				Engine:               pointer.String("aurora-mysql"),
+				DBInstanceArn:        pointer.String("mock-db-aurora-2"),
 			},
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-aurora-3"),
 				DBInstanceStatus:     pointer.String("available"),
 				Engine:               pointer.String("aurora-postgresql"),
+				DBInstanceArn:        pointer.String("mock-db-aurora-3"),
 			},
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-custom-1"),
 				DBInstanceStatus:     pointer.String("available"),
 				Engine:               pointer.String("custom-oracle-ee"),
+				DBInstanceArn:        pointer.String("mock-db-custom-1"),
 			},
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-custom-2"),
 				DBInstanceStatus:     pointer.String("available"),
 				Engine:               pointer.String("custom-sqlserver-ee"),
+				DBInstanceArn:        pointer.String("mock-db-custom-2"),
 			},
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-custom-3"),
 				DBInstanceStatus:     pointer.String("available"),
 				Engine:               pointer.String("custom-sqlserver-se"),
+				DBInstanceArn:        pointer.String("mock-db-custom-3"),
 			},
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-custom-4"),
 				DBInstanceStatus:     pointer.String("available"),
 				Engine:               pointer.String("custom-sqlserver-web"),
+				DBInstanceArn:        pointer.String("mock-db-custom-4"),
+			},
+		},
+	},
+}
+
+var connectionTestDBInstances = []*rds.DescribeDBInstancesOutput{
+	{
+		DBInstances: []types.DBInstance{
+			{
+				DBInstanceIdentifier: pointer.String("instance-id-connection-controller"),
+				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("postgres"),
+				DBInstanceArn:        pointer.String("instance-id-connection-controller"),
+			},
+			{
+				DBInstanceIdentifier: pointer.String("instance-id-oracle-connection-controller"),
+				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("oracle-se2"),
+				DBInstanceArn:        pointer.String("instance-id-oracle-connection-controller"),
+			},
+			{
+				DBInstanceIdentifier: pointer.String("instance-id-sqlserver-connection-controller"),
+				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("sqlserver-ex"),
+				DBInstanceArn:        pointer.String("instance-id-sqlserver-connection-controller"),
 			},
 		},
 	},
@@ -141,6 +201,8 @@ func NewMockDescribeDBInstancesPaginator(accessKey, secretKey, region string) co
 	counter := 0
 	if strings.HasSuffix(accessKey, "INVENTORYCONTROLLER") {
 		counter = 3
+	} else if strings.HasSuffix(accessKey, "CONNECTIONCONTROLLER") {
+		counter = 1
 	}
 	return &mockDescribeDBInstancesPaginator{accessKey: accessKey, secretKey: secretKey, region: region, counter: counter}
 }
@@ -152,7 +214,11 @@ func (m *mockDescribeDBInstancesPaginator) HasMorePages() bool {
 func (m *mockDescribeDBInstancesPaginator) NextPage(ctx context.Context, f ...func(option *rds.Options)) (*rds.DescribeDBInstancesOutput, error) {
 	if m.counter > 0 {
 		m.counter--
-		return dbInstances[m.counter], nil
+		if strings.HasSuffix(m.accessKey, "INVENTORYCONTROLLER") {
+			return inventoryTestDBInstances[m.counter], nil
+		} else if strings.HasSuffix(m.accessKey, "CONNECTIONCONTROLLER") {
+			return connectionTestDBInstances[m.counter], nil
+		}
 	}
 	return nil, nil
 }
