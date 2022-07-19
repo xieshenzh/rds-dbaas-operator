@@ -108,6 +108,8 @@ type RDSInventoryReconciler struct {
 	GetDescribeDBInstancesAPI          func(accessKey, secretKey, region string) controllersrds.DescribeDBInstancesAPI
 	ACKInstallNamespace                string
 	RDSCRDFilePath                     string
+	WaitForRDSControllerRetries        int
+	WaitForRDSControllerInterval       time.Duration
 }
 
 //+kubebuilder:rbac:groups=dbaas.redhat.com,resources=rdsinventories,verbs=get;list;watch;create;update;patch;delete
@@ -798,9 +800,9 @@ func (r *RDSInventoryReconciler) stopRDSController(ctx context.Context, cli clie
 	for {
 		if err := cli.Get(ctx, client.ObjectKey{Namespace: r.ACKInstallNamespace, Name: ackDeploymentName}, deployment); err != nil {
 			if errors.IsNotFound(err) {
-				if wait && waitCounter < 15 {
+				if wait && waitCounter < r.WaitForRDSControllerRetries {
 					logger.Info("Wait for the installation of the RDS controller")
-					time.Sleep(30 * time.Second)
+					time.Sleep(r.WaitForRDSControllerInterval)
 					waitCounter++
 					continue
 				} else {

@@ -30,6 +30,7 @@ import (
 
 	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
 	rdsdbaasv1alpha1 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
+	"github.com/RHEcosystemAppEng/rds-dbaas-operator/controllers/rds/test"
 	rdsv1alpha1 "github.com/aws-controllers-k8s/rds-controller/apis/v1alpha1"
 	ackv1alpha1 "github.com/aws-controllers-k8s/runtime/apis/core/v1alpha1"
 )
@@ -40,7 +41,7 @@ var _ = Describe("RDSConnectionController", func() {
 
 		dbInstance := &rdsv1alpha1.DBInstance{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "db-instance-connection-controller",
+				Name:      "db-instance-postgres-connection-controller",
 				Namespace: testNamespace,
 			},
 			Spec: rdsv1alpha1.DBInstanceSpec{
@@ -229,7 +230,7 @@ var _ = Describe("RDSConnectionController", func() {
 				})
 
 				Context("when Inventory is ready", func() {
-					accessKey := "AKIAIOSFODNN7EXAMPLECONNECTIONCONTROLLER"
+					accessKey := "AKIAIOSFODNN7EXAMPLE" + test.ConnectionControllerTestAccessKeySuffix
 					secretKey := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 					region := "us-east-1"
 
@@ -588,7 +589,7 @@ var _ = Describe("RDSConnectionController", func() {
 
 		Context("when Inventory is created and ready", func() {
 			credentialName := "credentials-ref-jdbc-url-connection-controller"
-			accessKey := "AKIAIOSFODNN7EXAMPLECONNECTIONCONTROLLER"
+			accessKey := "AKIAIOSFODNN7EXAMPLE" + test.ConnectionControllerTestAccessKeySuffix
 			secretKey := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 			region := "us-east-1"
 

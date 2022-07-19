@@ -77,13 +77,17 @@ func main() {
 	var probeAddr string
 	var syncPeriod time.Duration
 	var logLevel string
+	var rdsControllerRetries int
+	var rdsControllerInterval time.Duration
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
-	flag.DurationVar(&syncPeriod, "sync-period-min", 180*time.Minute, "The minimum interval at which watched resources are reconciled (e.g. 30 minutes)")
+	flag.DurationVar(&syncPeriod, "sync-period-min", 180*time.Minute, "The minimum interval at which watched resources are reconciled (e.g. 30 minutes).")
 	flag.StringVar(&logLevel, "log-level", "info", "Log level.")
+	flag.IntVar(&rdsControllerRetries, "wait-for-rds-controller-retries", 15, "The maximum times to check if the RDS controller is ready to run before setting up the Inventory controller.")
+	flag.DurationVar(&rdsControllerInterval, "wait-for-rds-controller-interval", 30*time.Second, "The interval at which to check if the RDS controller is ready to run before setting up the Inventory controller.")
 
 	var level zapcore.Level
 	if err := level.UnmarshalText([]byte(logLevel)); err != nil {
@@ -148,6 +152,8 @@ func main() {
 		GetModifyDBInstanceAPI:             controllersrds.NewModifyDBInstance,
 		GetDescribeDBInstancesAPI:          controllersrds.NewDescribeDBInstances,
 		ACKInstallNamespace:                installNamespace,
+		WaitForRDSControllerInterval:       rdsControllerInterval,
+		WaitForRDSControllerRetries:        rdsControllerRetries,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RDSInventory")
 		os.Exit(1)

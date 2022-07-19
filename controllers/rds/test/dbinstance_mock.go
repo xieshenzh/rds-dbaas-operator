@@ -192,6 +192,12 @@ var connectionTestDBInstances = []*rds.DescribeDBInstancesOutput{
 	},
 }
 
+var (
+	InventoryControllerTestAccessKeySuffix  = "INVENTORYCONTROLLER"
+	InstanceControllerTestAccessKeySuffix   = "INSTANCECONTROLLER"
+	ConnectionControllerTestAccessKeySuffix = "CONNECTIONCONTROLLER"
+)
+
 type mockDescribeDBInstancesPaginator struct {
 	accessKey, secretKey, region string
 	counter                      int
@@ -199,9 +205,9 @@ type mockDescribeDBInstancesPaginator struct {
 
 func NewMockDescribeDBInstancesPaginator(accessKey, secretKey, region string) controllersrds.DescribeDBInstancesPaginatorAPI {
 	counter := 0
-	if strings.HasSuffix(accessKey, "INVENTORYCONTROLLER") {
+	if strings.HasSuffix(accessKey, InventoryControllerTestAccessKeySuffix) {
 		counter = 3
-	} else if strings.HasSuffix(accessKey, "CONNECTIONCONTROLLER") {
+	} else if strings.HasSuffix(accessKey, ConnectionControllerTestAccessKeySuffix) {
 		counter = 1
 	}
 	return &mockDescribeDBInstancesPaginator{accessKey: accessKey, secretKey: secretKey, region: region, counter: counter}
@@ -214,9 +220,9 @@ func (m *mockDescribeDBInstancesPaginator) HasMorePages() bool {
 func (m *mockDescribeDBInstancesPaginator) NextPage(ctx context.Context, f ...func(option *rds.Options)) (*rds.DescribeDBInstancesOutput, error) {
 	if m.counter > 0 {
 		m.counter--
-		if strings.HasSuffix(m.accessKey, "INVENTORYCONTROLLER") {
+		if strings.HasSuffix(m.accessKey, InventoryControllerTestAccessKeySuffix) {
 			return inventoryTestDBInstances[m.counter], nil
-		} else if strings.HasSuffix(m.accessKey, "CONNECTIONCONTROLLER") {
+		} else if strings.HasSuffix(m.accessKey, ConnectionControllerTestAccessKeySuffix) {
 			return connectionTestDBInstances[m.counter], nil
 		}
 	}

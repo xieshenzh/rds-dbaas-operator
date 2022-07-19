@@ -193,6 +193,8 @@ var _ = BeforeSuite(func() {
 		GetDescribeDBInstancesAPI:          controllersrdstest.NewDescribeDBInstances,
 		ACKInstallNamespace:                testNamespace,
 		RDSCRDFilePath:                     filepath.Join("..", "rds", "config", "common", "bases"),
+		WaitForRDSControllerRetries:        10,
+		WaitForRDSControllerInterval:       30 * time.Second,
 	}
 	err = inventoryReconciler.SetupWithManager(mgr)
 	Expect(err).ToNot(HaveOccurred())
