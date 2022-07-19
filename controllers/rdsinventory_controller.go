@@ -108,6 +108,8 @@ type RDSInventoryReconciler struct {
 	GetDescribeDBInstancesAPI          func(accessKey, secretKey, region string) controllersrds.DescribeDBInstancesAPI
 	ACKInstallNamespace                string
 	RDSCRDFilePath                     string
+	WaitForRDSControllerRetries        int
+	WaitForRDSControllerInterval       time.Duration
 }
 
 //+kubebuilder:rbac:groups=dbaas.redhat.com,resources=rdsinventories,verbs=get;list;watch;create;update;patch;delete
@@ -422,7 +424,9 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			for i := range awsDBInstances {
 				dbInstance := awsDBInstances[i]
 				awsDBInstanceMap[*dbInstance.DBInstanceIdentifier] = dbInstance
-				if dbInstance.Engine != nil {
+				if dbInstance.Engine == nil {
+					continue
+				} else {
 					switch *dbInstance.Engine {
 					case aurora, auroraMysql, auroraPostgresql, customOracleEe, customSqlserverEe, customSqlserverSe, customSqlserverWeb:
 						continue
@@ -470,7 +474,9 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		waitForAdoptedResource := false
 		for i := range adoptedDBInstanceList.Items {
 			adoptedDBInstance := adoptedDBInstanceList.Items[i]
-			if adoptedDBInstance.Spec.Engine != nil {
+			if adoptedDBInstance.Spec.Engine == nil {
+				continue
+			} else {
 				switch *adoptedDBInstance.Spec.Engine {
 				case aurora, auroraMysql, auroraPostgresql, customOracleEe, customSqlserverEe, customSqlserverSe, customSqlserverWeb:
 					continue
@@ -483,29 +489,37 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			if adoptedDBInstance.Status.DBInstanceStatus != nil && *adoptedDBInstance.Status.DBInstanceStatus == "deleting" {
 				continue
 			}
+			if adoptedDBInstance.Status.ACKResourceMetadata == nil || adoptedDBInstance.Status.ACKResourceMetadata.ARN == nil {
+				continue
+			}
+			awsDBInstance, awsOk := awsDBInstanceMap[*adoptedDBInstance.Spec.DBInstanceIdentifier]
+			if !awsOk {
+				continue
+			} else if awsDBInstance.DBInstanceArn == nil ||
+				*awsDBInstance.DBInstanceArn != string(*adoptedDBInstance.Status.ACKResourceMetadata.ARN) {
+				continue
+			}
 
 			if adoptedDBInstance.Spec.MasterUsername == nil || adoptedDBInstance.Spec.DBName == nil {
-				if awsDBInstance, ok := awsDBInstanceMap[*adoptedDBInstance.Spec.DBInstanceIdentifier]; ok {
-					update := false
-					if adoptedDBInstance.Spec.MasterUsername == nil && awsDBInstance.MasterUsername != nil {
-						adoptedDBInstance.Spec.MasterUsername = pointer.String(*awsDBInstance.MasterUsername)
-						update = true
-					}
-					if adoptedDBInstance.Spec.DBName == nil && awsDBInstance.DBName != nil {
-						adoptedDBInstance.Spec.DBName = pointer.String(*awsDBInstance.DBName)
-						update = true
-					}
-					if update {
-						if e := r.Update(ctx, &adoptedDBInstance); e != nil {
-							if errors.IsConflict(e) {
-								logger.Info("Adopted DB Instance modified, retry reconciling")
-								returnRequeueSyncReset()
-								return true, false
-							}
-							logger.Error(e, "Failed to update connection info of the adopted DB Instance", "DB Instance", adoptedDBInstance)
-							returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageUpdateInstanceError)
+				update := false
+				if adoptedDBInstance.Spec.MasterUsername == nil && awsDBInstance.MasterUsername != nil {
+					adoptedDBInstance.Spec.MasterUsername = pointer.String(*awsDBInstance.MasterUsername)
+					update = true
+				}
+				if adoptedDBInstance.Spec.DBName == nil && awsDBInstance.DBName != nil {
+					adoptedDBInstance.Spec.DBName = pointer.String(*awsDBInstance.DBName)
+					update = true
+				}
+				if update {
+					if e := r.Update(ctx, &adoptedDBInstance); e != nil {
+						if errors.IsConflict(e) {
+							logger.Info("Adopted DB Instance modified, retry reconciling")
+							returnRequeueSyncReset()
 							return true, false
 						}
+						logger.Error(e, "Failed to update connection info of the adopted DB Instance", "DB Instance", adoptedDBInstance)
+						returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageUpdateInstanceError)
+						return true, false
 					}
 				}
 			}
@@ -551,6 +565,22 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	syncDBInstancesStatus := func() bool {
+		awsDBInstanceIdentifiers := map[string]string{}
+		describeDBInstancesPaginator := r.GetDescribeDBInstancesPaginatorAPI(accessKey, secretKey, region)
+		for describeDBInstancesPaginator.HasMorePages() {
+			if output, e := describeDBInstancesPaginator.NextPage(ctx); e != nil {
+				logger.Error(e, "Failed to read DB Instances of the Inventory from AWS")
+				returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetInstancesError)
+				return true
+			} else if output != nil {
+				for _, instance := range output.DBInstances {
+					if instance.DBInstanceIdentifier != nil && instance.DBInstanceArn != nil {
+						awsDBInstanceIdentifiers[*instance.DBInstanceIdentifier] = *instance.DBInstanceArn
+					}
+				}
+			}
+		}
+
 		dbInstanceList := &rdsv1alpha1.DBInstanceList{}
 		if e := r.List(ctx, dbInstanceList, client.InNamespace(inventory.Namespace)); e != nil {
 			logger.Error(e, "Failed to read DB Instances of the Inventory in the cluster")
@@ -561,6 +591,15 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		var instances []dbaasv1alpha1.Instance
 		for i := range dbInstanceList.Items {
 			dbInstance := dbInstanceList.Items[i]
+			if dbInstance.Spec.DBInstanceIdentifier == nil ||
+				dbInstance.Status.ACKResourceMetadata == nil || dbInstance.Status.ACKResourceMetadata.ARN == nil {
+				continue
+			}
+			if arn, ok := awsDBInstanceIdentifiers[*dbInstance.Spec.DBInstanceIdentifier]; !ok {
+				continue
+			} else if arn != string(*dbInstance.Status.ACKResourceMetadata.ARN) {
+				continue
+			}
 			instance := dbaasv1alpha1.Instance{
 				InstanceID:   *dbInstance.Spec.DBInstanceIdentifier,
 				Name:         dbInstance.Name,
@@ -757,12 +796,14 @@ func (r *RDSInventoryReconciler) stopRDSController(ctx context.Context, cli clie
 	logger := log.FromContext(ctx)
 
 	deployment := &appsv1.Deployment{}
+	waitCounter := 0
 	for {
 		if err := cli.Get(ctx, client.ObjectKey{Namespace: r.ACKInstallNamespace, Name: ackDeploymentName}, deployment); err != nil {
 			if errors.IsNotFound(err) {
-				if wait {
+				if wait && waitCounter < r.WaitForRDSControllerRetries {
 					logger.Info("Wait for the installation of the RDS controller")
-					time.Sleep(25 * time.Second)
+					time.Sleep(r.WaitForRDSControllerInterval)
+					waitCounter++
 					continue
 				} else {
 					return err

@@ -30,6 +30,7 @@ import (
 
 	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
 	rdsdbaasv1alpha1 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
+	"github.com/RHEcosystemAppEng/rds-dbaas-operator/controllers/rds/test"
 	rdsv1alpha1 "github.com/aws-controllers-k8s/rds-controller/apis/v1alpha1"
 	ackv1alpha1 "github.com/aws-controllers-k8s/runtime/apis/core/v1alpha1"
 	ophandler "github.com/operator-framework/operator-lib/handler"
@@ -99,7 +100,7 @@ var _ = Describe("RDSInventoryController", func() {
 		credentialName := "credentials-ref-inventory-controller"
 		inventoryName := "rds-inventory-inventory-controller"
 
-		accessKey := "AKIAIOSFODNN7EXAMPLEINVENTORYCONTROLLER"
+		accessKey := "AKIAIOSFODNN7EXAMPLE" + test.InventoryControllerTestAccessKeySuffix
 		secretKey := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 		region := "us-east-1"
 
@@ -137,6 +138,14 @@ var _ = Describe("RDSInventoryController", func() {
 						return false
 					}
 					dbInstance1.Status.DBInstanceStatus = pointer.String("available")
+					arn := ackv1alpha1.AWSResourceName("db-instance-1")
+					ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+					region := ackv1alpha1.AWSRegion("us-east-1")
+					dbInstance1.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+						ARN:            &arn,
+						OwnerAccountID: &ownerAccountID,
+						Region:         &region,
+					}
 					err := k8sClient.Status().Update(ctx, dbInstance1)
 					return err == nil
 				}, timeout).Should(BeTrue())
@@ -161,6 +170,14 @@ var _ = Describe("RDSInventoryController", func() {
 						return false
 					}
 					dbInstance2.Status.DBInstanceStatus = pointer.String("creating")
+					arn := ackv1alpha1.AWSResourceName("db-instance-2")
+					ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+					region := ackv1alpha1.AWSRegion("us-east-1")
+					dbInstance2.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+						ARN:            &arn,
+						OwnerAccountID: &ownerAccountID,
+						Region:         &region,
+					}
 					err := k8sClient.Status().Update(ctx, dbInstance2)
 					return err == nil
 				}, timeout).Should(BeTrue())
@@ -188,6 +205,14 @@ var _ = Describe("RDSInventoryController", func() {
 						return false
 					}
 					dbInstance3.Status.DBInstanceStatus = pointer.String("available")
+					arn := ackv1alpha1.AWSResourceName("mock-adopted-db-instance-3")
+					ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+					region := ackv1alpha1.AWSRegion("us-east-1")
+					dbInstance3.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+						ARN:            &arn,
+						OwnerAccountID: &ownerAccountID,
+						Region:         &region,
+					}
 					err := k8sClient.Status().Update(ctx, dbInstance3)
 					return err == nil
 				}, timeout).Should(BeTrue())
@@ -215,6 +240,14 @@ var _ = Describe("RDSInventoryController", func() {
 						return false
 					}
 					dbInstance4.Status.DBInstanceStatus = pointer.String("deleting")
+					arn := ackv1alpha1.AWSResourceName("mock-adopted-db-instance-4")
+					ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+					region := ackv1alpha1.AWSRegion("us-east-1")
+					dbInstance4.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+						ARN:            &arn,
+						OwnerAccountID: &ownerAccountID,
+						Region:         &region,
+					}
 					err := k8sClient.Status().Update(ctx, dbInstance4)
 					return err == nil
 				}, timeout).Should(BeTrue())
@@ -242,7 +275,85 @@ var _ = Describe("RDSInventoryController", func() {
 						return false
 					}
 					dbInstance5.Status.DBInstanceStatus = pointer.String("creating")
+					arn := ackv1alpha1.AWSResourceName("mock-adopted-db-instance-5")
+					ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+					region := ackv1alpha1.AWSRegion("us-east-1")
+					dbInstance5.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+						ARN:            &arn,
+						OwnerAccountID: &ownerAccountID,
+						Region:         &region,
+					}
 					err := k8sClient.Status().Update(ctx, dbInstance5)
+					return err == nil
+				}, timeout).Should(BeTrue())
+			})
+
+			dbInstance14 := &rdsv1alpha1.DBInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "db-instance-inventory-controller-14",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"rds.dbaas.redhat.com/adopted": "true",
+					},
+				},
+				Spec: rdsv1alpha1.DBInstanceSpec{
+					Engine:               pointer.String("mysql"),
+					DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-14"),
+					DBInstanceClass:      pointer.String("db.t3.small"),
+				},
+			}
+			BeforeEach(assertResourceCreation(dbInstance14))
+			AfterEach(assertResourceDeletion(dbInstance14))
+			BeforeEach(func() {
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance14), dbInstance14); err != nil {
+						return false
+					}
+					dbInstance14.Status.DBInstanceStatus = pointer.String("available")
+					arn := ackv1alpha1.AWSResourceName("mock-adopted-db-instance-14")
+					ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+					region := ackv1alpha1.AWSRegion("us-east-1")
+					dbInstance14.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+						ARN:            &arn,
+						OwnerAccountID: &ownerAccountID,
+						Region:         &region,
+					}
+					err := k8sClient.Status().Update(ctx, dbInstance14)
+					return err == nil
+				}, timeout).Should(BeTrue())
+			})
+
+			dbInstance15 := &rdsv1alpha1.DBInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "db-instance-inventory-controller-15",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"rds.dbaas.redhat.com/adopted": "true",
+					},
+				},
+				Spec: rdsv1alpha1.DBInstanceSpec{
+					Engine:               pointer.String("mysql"),
+					DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-15"),
+					DBInstanceClass:      pointer.String("db.t3.small"),
+				},
+			}
+			BeforeEach(assertResourceCreation(dbInstance15))
+			AfterEach(assertResourceDeletion(dbInstance15))
+			BeforeEach(func() {
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance15), dbInstance15); err != nil {
+						return false
+					}
+					dbInstance15.Status.DBInstanceStatus = pointer.String("creating")
+					arn := ackv1alpha1.AWSResourceName("mock-adopted-db-instance-15")
+					ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+					region := ackv1alpha1.AWSRegion("us-east-1")
+					dbInstance15.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+						ARN:            &arn,
+						OwnerAccountID: &ownerAccountID,
+						Region:         &region,
+					}
+					err := k8sClient.Status().Update(ctx, dbInstance15)
 					return err == nil
 				}, timeout).Should(BeTrue())
 			})
@@ -270,6 +381,14 @@ var _ = Describe("RDSInventoryController", func() {
 						return false
 					}
 					dbInstance6.Status.DBInstanceStatus = pointer.String("available")
+					arn := ackv1alpha1.AWSResourceName("mock-adopted-db-instance-6")
+					ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+					region := ackv1alpha1.AWSRegion("us-east-1")
+					dbInstance6.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+						ARN:            &arn,
+						OwnerAccountID: &ownerAccountID,
+						Region:         &region,
+					}
 					err := k8sClient.Status().Update(ctx, dbInstance6)
 					return err == nil
 				}, timeout).Should(BeTrue())
@@ -297,6 +416,14 @@ var _ = Describe("RDSInventoryController", func() {
 						return false
 					}
 					dbInstance7.Status.DBInstanceStatus = pointer.String("available")
+					arn := ackv1alpha1.AWSResourceName("mock-adopted-db-instance-7")
+					ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+					region := ackv1alpha1.AWSRegion("us-east-1")
+					dbInstance7.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+						ARN:            &arn,
+						OwnerAccountID: &ownerAccountID,
+						Region:         &region,
+					}
 					err := k8sClient.Status().Update(ctx, dbInstance7)
 					return err == nil
 				}, timeout).Should(BeTrue())
@@ -324,6 +451,14 @@ var _ = Describe("RDSInventoryController", func() {
 						return false
 					}
 					dbInstance8.Status.DBInstanceStatus = pointer.String("available")
+					arn := ackv1alpha1.AWSResourceName("mock-adopted-db-instance-8")
+					ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+					region := ackv1alpha1.AWSRegion("us-east-1")
+					dbInstance8.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+						ARN:            &arn,
+						OwnerAccountID: &ownerAccountID,
+						Region:         &region,
+					}
 					err := k8sClient.Status().Update(ctx, dbInstance8)
 					return err == nil
 				}, timeout).Should(BeTrue())
@@ -351,6 +486,14 @@ var _ = Describe("RDSInventoryController", func() {
 						return false
 					}
 					dbInstance9.Status.DBInstanceStatus = pointer.String("available")
+					arn := ackv1alpha1.AWSResourceName("mock-adopted-db-instance-9")
+					ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+					region := ackv1alpha1.AWSRegion("us-east-1")
+					dbInstance9.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+						ARN:            &arn,
+						OwnerAccountID: &ownerAccountID,
+						Region:         &region,
+					}
 					err := k8sClient.Status().Update(ctx, dbInstance9)
 					return err == nil
 				}, timeout).Should(BeTrue())
@@ -378,6 +521,14 @@ var _ = Describe("RDSInventoryController", func() {
 						return false
 					}
 					dbInstance10.Status.DBInstanceStatus = pointer.String("available")
+					arn := ackv1alpha1.AWSResourceName("mock-adopted-db-instance-10")
+					ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+					region := ackv1alpha1.AWSRegion("us-east-1")
+					dbInstance10.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+						ARN:            &arn,
+						OwnerAccountID: &ownerAccountID,
+						Region:         &region,
+					}
 					err := k8sClient.Status().Update(ctx, dbInstance10)
 					return err == nil
 				}, timeout).Should(BeTrue())
@@ -405,6 +556,14 @@ var _ = Describe("RDSInventoryController", func() {
 						return false
 					}
 					dbInstance11.Status.DBInstanceStatus = pointer.String("available")
+					arn := ackv1alpha1.AWSResourceName("mock-adopted-db-instance-11")
+					ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+					region := ackv1alpha1.AWSRegion("us-east-1")
+					dbInstance11.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+						ARN:            &arn,
+						OwnerAccountID: &ownerAccountID,
+						Region:         &region,
+					}
 					err := k8sClient.Status().Update(ctx, dbInstance11)
 					return err == nil
 				}, timeout).Should(BeTrue())
@@ -432,6 +591,14 @@ var _ = Describe("RDSInventoryController", func() {
 						return false
 					}
 					dbInstance12.Status.DBInstanceStatus = pointer.String("available")
+					arn := ackv1alpha1.AWSResourceName("mock-adopted-db-instance-12")
+					ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+					region := ackv1alpha1.AWSRegion("us-east-1")
+					dbInstance12.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+						ARN:            &arn,
+						OwnerAccountID: &ownerAccountID,
+						Region:         &region,
+					}
 					err := k8sClient.Status().Update(ctx, dbInstance12)
 					return err == nil
 				}, timeout).Should(BeTrue())
@@ -459,6 +626,14 @@ var _ = Describe("RDSInventoryController", func() {
 						return false
 					}
 					dbInstance13.Status.DBInstanceStatus = pointer.String("available")
+					arn := ackv1alpha1.AWSResourceName("mock-adopted-db-instance-13")
+					ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+					region := ackv1alpha1.AWSRegion("us-east-1")
+					dbInstance13.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+						ARN:            &arn,
+						OwnerAccountID: &ownerAccountID,
+						Region:         &region,
+					}
 					err := k8sClient.Status().Update(ctx, dbInstance13)
 					return err == nil
 				}, timeout).Should(BeTrue())
@@ -709,9 +884,73 @@ var _ = Describe("RDSInventoryController", func() {
 						}, timeout).Should(BeTrue())
 
 						assertResourceCreation(mockDBInstance1)()
+						Eventually(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(mockDBInstance1), mockDBInstance1); err != nil {
+								return false
+							}
+							arn := ackv1alpha1.AWSResourceName("mock-db-instance-1")
+							ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+							region := ackv1alpha1.AWSRegion("us-east-1")
+							mockDBInstance1.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+								ARN:            &arn,
+								OwnerAccountID: &ownerAccountID,
+								Region:         &region,
+							}
+							err := k8sClient.Status().Update(ctx, mockDBInstance1)
+							return err == nil
+						}, timeout).Should(BeTrue())
+
 						assertResourceCreation(mockDBInstance2)()
+						Eventually(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(mockDBInstance2), mockDBInstance2); err != nil {
+								return false
+							}
+							arn := ackv1alpha1.AWSResourceName("mock-db-instance-2")
+							ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+							region := ackv1alpha1.AWSRegion("us-east-1")
+							mockDBInstance2.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+								ARN:            &arn,
+								OwnerAccountID: &ownerAccountID,
+								Region:         &region,
+							}
+							err := k8sClient.Status().Update(ctx, mockDBInstance2)
+							return err == nil
+						}, timeout).Should(BeTrue())
+
 						assertResourceCreation(mockDBInstance3)()
+						Eventually(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(mockDBInstance3), mockDBInstance3); err != nil {
+								return false
+							}
+							arn := ackv1alpha1.AWSResourceName("mock-db-instance-3")
+							ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+							region := ackv1alpha1.AWSRegion("us-east-1")
+							mockDBInstance3.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+								ARN:            &arn,
+								OwnerAccountID: &ownerAccountID,
+								Region:         &region,
+							}
+							err := k8sClient.Status().Update(ctx, mockDBInstance3)
+							return err == nil
+						}, timeout).Should(BeTrue())
+
 						assertResourceCreation(mockDBInstance4)()
+						Eventually(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(mockDBInstance4), mockDBInstance4); err != nil {
+								return false
+							}
+							arn := ackv1alpha1.AWSResourceName("mock-db-instance-4")
+							ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+							region := ackv1alpha1.AWSRegion("us-east-1")
+							mockDBInstance4.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+								ARN:            &arn,
+								OwnerAccountID: &ownerAccountID,
+								Region:         &region,
+							}
+							err := k8sClient.Status().Update(ctx, mockDBInstance4)
+							return err == nil
+						}, timeout).Should(BeTrue())
+
 						Eventually(func() bool {
 							clusterDBInstanceList := &rdsv1alpha1.DBInstanceList{}
 							if e := k8sClient.List(ctx, clusterDBInstanceList, client.InNamespace(inventory.Namespace)); e != nil {
@@ -751,7 +990,7 @@ var _ = Describe("RDSInventoryController", func() {
 							if condition == nil || condition.Status != metav1.ConditionTrue || condition.Reason != "SyncOK" {
 								return false
 							}
-							if len(inv.Status.Instances) < 10 {
+							if len(inv.Status.Instances) < 7 {
 								return false
 							}
 							instancesMap := map[string]dbaasv1alpha1.Instance{}
@@ -759,21 +998,11 @@ var _ = Describe("RDSInventoryController", func() {
 								ins := inv.Status.Instances[i]
 								instancesMap[ins.InstanceID] = ins
 							}
-							if ins, ok := instancesMap[*dbInstance1.Spec.DBInstanceIdentifier]; !ok {
+							if _, ok := instancesMap[*dbInstance1.Spec.DBInstanceIdentifier]; ok {
 								return false
-							} else {
-								Expect(ins.Name).Should(Equal(dbInstance1.Name))
-								s, ok := ins.InstanceInfo["dbInstanceStatus"]
-								Expect(ok).Should(BeTrue())
-								Expect(s).Should(Equal(*dbInstance1.Status.DBInstanceStatus))
 							}
-							if ins, ok := instancesMap[*dbInstance2.Spec.DBInstanceIdentifier]; !ok {
+							if _, ok := instancesMap[*dbInstance2.Spec.DBInstanceIdentifier]; ok {
 								return false
-							} else {
-								Expect(ins.Name).Should(Equal(dbInstance2.Name))
-								s, ok := ins.InstanceInfo["dbInstanceStatus"]
-								Expect(ok).Should(BeTrue())
-								Expect(s).Should(Equal(*dbInstance2.Status.DBInstanceStatus))
 							}
 							if ins, ok := instancesMap[*dbInstance3.Spec.DBInstanceIdentifier]; !ok {
 								return false
@@ -798,6 +1027,12 @@ var _ = Describe("RDSInventoryController", func() {
 								s, ok := ins.InstanceInfo["dbInstanceStatus"]
 								Expect(ok).Should(BeTrue())
 								Expect(s).Should(Equal(*dbInstance5.Status.DBInstanceStatus))
+							}
+							if _, ok := instancesMap[*dbInstance14.Spec.DBInstanceIdentifier]; ok {
+								return false
+							}
+							if _, ok := instancesMap[*dbInstance15.Spec.DBInstanceIdentifier]; ok {
+								return false
 							}
 							return true
 						}, timeout).Should(BeTrue())
@@ -905,6 +1140,71 @@ var _ = Describe("RDSInventoryController", func() {
 								return false
 							}
 							err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret5), dbSecret5)
+							if err == nil || !errors.IsNotFound(err) {
+								return false
+							}
+							return true
+						}, timeout).Should(BeTrue())
+
+						By("checking if the username and password of adopted db instance is not reset when the instance not exist in AWS")
+						dbInstance14 := &rdsv1alpha1.DBInstance{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-14",
+								Namespace: testNamespace,
+							},
+						}
+						dbSecret14 := &v1.Secret{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-14-credentials",
+								Namespace: testNamespace,
+							},
+						}
+						Consistently(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance14), dbInstance14); err != nil {
+								return false
+							}
+							if dbInstance14.Spec.DBName != nil {
+								return false
+							}
+							if dbInstance14.Spec.MasterUsername != nil {
+								return false
+							}
+							if dbInstance14.Spec.MasterUserPassword != nil {
+								return false
+							}
+							err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret14), dbSecret14)
+							if err == nil || !errors.IsNotFound(err) {
+								return false
+							}
+							return true
+						}, timeout).Should(BeTrue())
+
+						dbInstance15 := &rdsv1alpha1.DBInstance{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-15",
+								Namespace: testNamespace,
+							},
+						}
+						dbSecret15 := &v1.Secret{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "db-instance-inventory-controller-15-credentials",
+								Namespace: testNamespace,
+							},
+						}
+						Consistently(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance15), dbInstance15); err != nil {
+								return false
+							}
+							if dbInstance15.Spec.DBName != nil {
+								return false
+							}
+							if dbInstance15.Spec.MasterUsername != nil {
+								return false
+							}
+							if dbInstance15.Spec.MasterUserPassword != nil {
+								return false
+							}
+							err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret15), dbSecret15)
 							if err == nil || !errors.IsNotFound(err) {
 								return false
 							}

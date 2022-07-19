@@ -36,6 +36,7 @@ import (
 
 	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
 	rdsdbaasv1alpha1 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
+	"github.com/RHEcosystemAppEng/rds-dbaas-operator/controllers/rds/test"
 	rdsv1alpha1 "github.com/aws-controllers-k8s/rds-controller/apis/v1alpha1"
 	ackv1alpha1 "github.com/aws-controllers-k8s/runtime/apis/core/v1alpha1"
 	ophandler "github.com/operator-framework/operator-lib/handler"
@@ -137,7 +138,7 @@ var _ = Describe("RDSInstanceController", func() {
 			})
 
 			Context("when Inventory is ready", func() {
-				accessKey := "AKIAIOSFODNN7EXAMPLEINSTANCECONTROLLER"
+				accessKey := "AKIAIOSFODNN7EXAMPLE" + test.InstanceControllerTestAccessKeySuffix
 				secretKey := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 				region := "us-east-1"
 
