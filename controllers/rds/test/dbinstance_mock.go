@@ -31,18 +31,21 @@ import (
 var inventoryTestDBInstances = []*rds.DescribeDBInstancesOutput{
 	{
 		DBInstances: []types.DBInstance{
+			// Adopted successful
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-instance-1"),
 				DBInstanceStatus:     pointer.String("available"),
 				Engine:               pointer.String("postgres"),
 				DBInstanceArn:        pointer.String("mock-db-instance-1"),
 			},
+			// Adopted successful
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-instance-2"),
 				DBInstanceStatus:     pointer.String("available"),
 				Engine:               pointer.String("postgres"),
 				DBInstanceArn:        pointer.String("mock-db-instance-2"),
 			},
+			// Adopted successful
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-instance-3"),
 				DBInstanceStatus:     pointer.String("available"),
@@ -53,22 +56,32 @@ var inventoryTestDBInstances = []*rds.DescribeDBInstancesOutput{
 	},
 	{
 		DBInstances: []types.DBInstance{
+			// Adopted successful
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-instance-4"),
 				DBInstanceStatus:     pointer.String("available"),
 				Engine:               pointer.String("postgres"),
 				DBInstanceArn:        pointer.String("mock-db-instance-4"),
 			},
+			// Deleting, Not Adopted
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-instance-5"),
 				DBInstanceStatus:     pointer.String("deleting"),
 				Engine:               pointer.String("mysql"),
 				DBInstanceArn:        pointer.String("mock-db-instance-5"),
 			},
+			// Adopted successfully
+			{
+				DBInstanceIdentifier: pointer.String("mock-db-instance-7"),
+				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("mysql"),
+				DBInstanceArn:        pointer.String("mock-db-instance-7"),
+			},
 		},
 	},
 	{
 		DBInstances: []types.DBInstance{
+			// Reset credentials successfully
 			{
 				DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-3"),
 				DBInstanceStatus:     pointer.String("available"),
@@ -77,6 +90,7 @@ var inventoryTestDBInstances = []*rds.DescribeDBInstancesOutput{
 				MasterUsername:       pointer.String("test-username"),
 				DBInstanceArn:        pointer.String("mock-adopted-db-instance-3"),
 			},
+			// Deleting, Not reset credentials
 			{
 				DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-4"),
 				DBInstanceStatus:     pointer.String("deleting"),
@@ -85,6 +99,7 @@ var inventoryTestDBInstances = []*rds.DescribeDBInstancesOutput{
 				MasterUsername:       pointer.String("test-username"),
 				DBInstanceArn:        pointer.String("mock-adopted-db-instance-4"),
 			},
+			// Not available, Not reset credentials
 			{
 				DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-5"),
 				DBInstanceStatus:     pointer.String("creating"),
@@ -93,6 +108,7 @@ var inventoryTestDBInstances = []*rds.DescribeDBInstancesOutput{
 				MasterUsername:       pointer.String("test-username"),
 				DBInstanceArn:        pointer.String("mock-adopted-db-instance-5"),
 			},
+			// ARN not match, Not reset credentials
 			{
 				DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-15"),
 				DBInstanceStatus:     pointer.String("available"),
@@ -104,6 +120,7 @@ var inventoryTestDBInstances = []*rds.DescribeDBInstancesOutput{
 		},
 	},
 	{
+		// Cluster not supported
 		DBInstances: []types.DBInstance{
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-cluster-1"),
@@ -120,6 +137,7 @@ var inventoryTestDBInstances = []*rds.DescribeDBInstancesOutput{
 		},
 	},
 	{
+		// Engine not supported
 		DBInstances: []types.DBInstance{
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-aurora-1"),

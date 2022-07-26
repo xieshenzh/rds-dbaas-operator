@@ -17,6 +17,8 @@ limitations under the License.
 package controllers_test
 
 import (
+	"strings"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -119,6 +121,7 @@ var _ = Describe("RDSInventoryController", func() {
 		AfterEach(assertResourceDeletion(credential))
 
 		Context("when checking the status of the Inventory", func() {
+			// Not exist in AWS
 			dbInstance1 := &rdsv1alpha1.DBInstance{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "db-instance-inventory-controller-1",
@@ -151,6 +154,7 @@ var _ = Describe("RDSInventoryController", func() {
 				}, timeout).Should(BeTrue())
 			})
 
+			// Not exist in AWS
 			dbInstance2 := &rdsv1alpha1.DBInstance{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "db-instance-inventory-controller-2",
@@ -183,6 +187,7 @@ var _ = Describe("RDSInventoryController", func() {
 				}, timeout).Should(BeTrue())
 			})
 
+			// Available
 			dbInstance3 := &rdsv1alpha1.DBInstance{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "db-instance-inventory-controller-3",
@@ -218,6 +223,7 @@ var _ = Describe("RDSInventoryController", func() {
 				}, timeout).Should(BeTrue())
 			})
 
+			// Deleting
 			dbInstance4 := &rdsv1alpha1.DBInstance{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "db-instance-inventory-controller-4",
@@ -253,6 +259,7 @@ var _ = Describe("RDSInventoryController", func() {
 				}, timeout).Should(BeTrue())
 			})
 
+			// Creating
 			dbInstance5 := &rdsv1alpha1.DBInstance{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "db-instance-inventory-controller-5",
@@ -288,6 +295,7 @@ var _ = Describe("RDSInventoryController", func() {
 				}, timeout).Should(BeTrue())
 			})
 
+			// Not exist in AWS
 			dbInstance14 := &rdsv1alpha1.DBInstance{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "db-instance-inventory-controller-14",
@@ -323,6 +331,7 @@ var _ = Describe("RDSInventoryController", func() {
 				}, timeout).Should(BeTrue())
 			})
 
+			// ARN not match AWS
 			dbInstance15 := &rdsv1alpha1.DBInstance{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "db-instance-inventory-controller-15",
@@ -358,6 +367,7 @@ var _ = Describe("RDSInventoryController", func() {
 				}, timeout).Should(BeTrue())
 			})
 
+			// Cluster
 			dbInstance6 := &rdsv1alpha1.DBInstance{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "db-instance-inventory-controller-6",
@@ -394,6 +404,7 @@ var _ = Describe("RDSInventoryController", func() {
 				}, timeout).Should(BeTrue())
 			})
 
+			// Aurora
 			dbInstance7 := &rdsv1alpha1.DBInstance{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "db-instance-inventory-controller-7",
@@ -429,6 +440,7 @@ var _ = Describe("RDSInventoryController", func() {
 				}, timeout).Should(BeTrue())
 			})
 
+			// Aurora
 			dbInstance8 := &rdsv1alpha1.DBInstance{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "db-instance-inventory-controller-8",
@@ -464,6 +476,7 @@ var _ = Describe("RDSInventoryController", func() {
 				}, timeout).Should(BeTrue())
 			})
 
+			// Aurora
 			dbInstance9 := &rdsv1alpha1.DBInstance{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "db-instance-inventory-controller-9",
@@ -499,6 +512,7 @@ var _ = Describe("RDSInventoryController", func() {
 				}, timeout).Should(BeTrue())
 			})
 
+			// Custom Oracle
 			dbInstance10 := &rdsv1alpha1.DBInstance{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "db-instance-inventory-controller-10",
@@ -534,6 +548,7 @@ var _ = Describe("RDSInventoryController", func() {
 				}, timeout).Should(BeTrue())
 			})
 
+			// Custom SqlServer
 			dbInstance11 := &rdsv1alpha1.DBInstance{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "db-instance-inventory-controller-11",
@@ -569,6 +584,7 @@ var _ = Describe("RDSInventoryController", func() {
 				}, timeout).Should(BeTrue())
 			})
 
+			// Custom SqlServer
 			dbInstance12 := &rdsv1alpha1.DBInstance{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "db-instance-inventory-controller-12",
@@ -604,6 +620,7 @@ var _ = Describe("RDSInventoryController", func() {
 				}, timeout).Should(BeTrue())
 			})
 
+			// Custom SqlServer
 			dbInstance13 := &rdsv1alpha1.DBInstance{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "db-instance-inventory-controller-13",
@@ -640,9 +657,10 @@ var _ = Describe("RDSInventoryController", func() {
 			})
 
 			Context("when mocking RDS controller adopting resources", func() {
+				// Available
 				mockDBInstance1 := &rdsv1alpha1.DBInstance{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "rhoda-adopted-db-instance-mock-db-instance-1",
+						Name:      "rhoda-adopted-postgres-mock-db-instance-1",
 						Namespace: testNamespace,
 					},
 					Spec: rdsv1alpha1.DBInstanceSpec{
@@ -653,9 +671,10 @@ var _ = Describe("RDSInventoryController", func() {
 				}
 				AfterEach(assertResourceDeletionIfExist(mockDBInstance1))
 
+				// Available
 				mockDBInstance2 := &rdsv1alpha1.DBInstance{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "rhoda-adopted-db-instance-mock-db-instance-2",
+						Name:      "rhoda-adopted-postgres-mock-db-instance-2",
 						Namespace: testNamespace,
 					},
 					Spec: rdsv1alpha1.DBInstanceSpec{
@@ -666,9 +685,10 @@ var _ = Describe("RDSInventoryController", func() {
 				}
 				AfterEach(assertResourceDeletionIfExist(mockDBInstance2))
 
+				// Available
 				mockDBInstance3 := &rdsv1alpha1.DBInstance{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "rhoda-adopted-db-instance-mock-db-instance-3",
+						Name:      "rhoda-adopted-postgres-mock-db-instance-3",
 						Namespace: testNamespace,
 					},
 					Spec: rdsv1alpha1.DBInstanceSpec{
@@ -679,9 +699,10 @@ var _ = Describe("RDSInventoryController", func() {
 				}
 				AfterEach(assertResourceDeletionIfExist(mockDBInstance3))
 
+				// Deleting
 				mockDBInstance4 := &rdsv1alpha1.DBInstance{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "rhoda-adopted-db-instance-mock-db-instance-4",
+						Name:      "rhoda-adopted-postgres-mock-db-instance-4",
 						Namespace: testNamespace,
 					},
 					Spec: rdsv1alpha1.DBInstanceSpec{
@@ -691,6 +712,55 @@ var _ = Describe("RDSInventoryController", func() {
 					},
 				}
 				AfterEach(assertResourceDeletionIfExist(mockDBInstance4))
+
+				// Adopted ARN not match AWS
+				mockDBInstance7 := &rdsv1alpha1.DBInstance{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "rhoda-adopted-mysql-mock-db-instance-7",
+						Namespace: testNamespace,
+					},
+					Spec: rdsv1alpha1.DBInstanceSpec{
+						Engine:               pointer.String("postgres"),
+						DBInstanceIdentifier: pointer.String("mock-db-instance-7"),
+						DBInstanceClass:      pointer.String("db.t3.micro"),
+					},
+				}
+				AfterEach(assertResourceDeletionIfExist(mockDBInstance7))
+				adoptedMockInstance7ARN := ackv1alpha1.AWSResourceName("mock-db-instance-7-0")
+				adoptedMockInstance7 := &ackv1alpha1.AdoptedResource{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "rhoda-adopted-mock-db-instance-7",
+						Namespace: testNamespace,
+					},
+					Spec: ackv1alpha1.AdoptedResourceSpec{
+						AWS: &ackv1alpha1.AWSIdentifiers{
+							NameOrID: "mock-db-instance-7",
+							ARN:      &adoptedMockInstance7ARN,
+						},
+						Kubernetes: &ackv1alpha1.ResourceWithMetadata{
+							GroupKind: metav1.GroupKind{
+								Group: rdsv1alpha1.GroupVersion.Group,
+								Kind:  "DBInstance",
+							},
+						},
+					},
+				}
+				BeforeEach(assertResourceCreation(adoptedMockInstance7))
+				AfterEach(assertResourceDeletionIfExist(adoptedMockInstance7))
+
+				// ARN match AWS
+				dbInstance15_0 := &rdsv1alpha1.DBInstance{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "mock-adopted-db-instance-15-0",
+						Namespace: testNamespace,
+					},
+					Spec: rdsv1alpha1.DBInstanceSpec{
+						Engine:               pointer.String("mysql"),
+						DBInstanceIdentifier: pointer.String("mock-adopted-db-instance-15"),
+						DBInstanceClass:      pointer.String("db.t3.micro"),
+					},
+				}
+				AfterEach(assertResourceDeletionIfExist(dbInstance15_0))
 
 				Context("when Inventory is created", func() {
 					inventory := &rdsdbaasv1alpha1.RDSInventory{
@@ -765,7 +835,7 @@ var _ = Describe("RDSInventoryController", func() {
 							if err := k8sClient.List(ctx, adoptedDBInstances, client.InNamespace(testNamespace)); err != nil {
 								return false
 							}
-							if len(adoptedDBInstances.Items) < 4 {
+							if len(adoptedDBInstances.Items) < 5 {
 								return false
 							}
 							dbInstancesMap := map[string]ackv1alpha1.AdoptedResource{}
@@ -777,7 +847,7 @@ var _ = Describe("RDSInventoryController", func() {
 							if instance, ok := dbInstancesMap["mock-db-instance-1"]; !ok {
 								return false
 							} else {
-								if instance.Name != "rhoda-adopted-db-instance-mock-db-instance-1" {
+								if !strings.HasPrefix(instance.Name, "rhoda-adopted-postgres-mock-db-instance-1") {
 									return false
 								}
 								typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
@@ -792,11 +862,14 @@ var _ = Describe("RDSInventoryController", func() {
 								label, labelOk := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]
 								Expect(labelOk).Should(BeTrue())
 								Expect(label).Should(Equal("true"))
+								Expect(instance.Spec.AWS.NameOrID).Should(Equal("mock-db-instance-1"))
+								Expect(instance.Spec.AWS.ARN).ShouldNot(BeNil())
+								Expect(string(*instance.Spec.AWS.ARN)).Should(Equal("mock-db-instance-1"))
 							}
 							if instance, ok := dbInstancesMap["mock-db-instance-2"]; !ok {
 								return false
 							} else {
-								if instance.Name != "rhoda-adopted-db-instance-mock-db-instance-2" {
+								if !strings.HasPrefix(instance.Name, "rhoda-adopted-postgres-mock-db-instance-2") {
 									return false
 								}
 								typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
@@ -811,11 +884,14 @@ var _ = Describe("RDSInventoryController", func() {
 								label, labelOk := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]
 								Expect(labelOk).Should(BeTrue())
 								Expect(label).Should(Equal("true"))
+								Expect(instance.Spec.AWS.NameOrID).Should(Equal("mock-db-instance-2"))
+								Expect(instance.Spec.AWS.ARN).ShouldNot(BeNil())
+								Expect(string(*instance.Spec.AWS.ARN)).Should(Equal("mock-db-instance-2"))
 							}
 							if instance, ok := dbInstancesMap["mock-db-instance-3"]; !ok {
 								return false
 							} else {
-								if instance.Name != "rhoda-adopted-db-instance-mock-db-instance-3" {
+								if !strings.HasPrefix(instance.Name, "rhoda-adopted-postgres-mock-db-instance-3") {
 									return false
 								}
 								typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
@@ -830,11 +906,14 @@ var _ = Describe("RDSInventoryController", func() {
 								label, labelOk := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]
 								Expect(labelOk).Should(BeTrue())
 								Expect(label).Should(Equal("true"))
+								Expect(instance.Spec.AWS.NameOrID).Should(Equal("mock-db-instance-3"))
+								Expect(instance.Spec.AWS.ARN).ShouldNot(BeNil())
+								Expect(string(*instance.Spec.AWS.ARN)).Should(Equal("mock-db-instance-3"))
 							}
 							if instance, ok := dbInstancesMap["mock-db-instance-4"]; !ok {
 								return false
 							} else {
-								if instance.Name != "rhoda-adopted-db-instance-mock-db-instance-4" {
+								if !strings.HasPrefix(instance.Name, "rhoda-adopted-postgres-mock-db-instance-4") {
 									return false
 								}
 								typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
@@ -849,6 +928,31 @@ var _ = Describe("RDSInventoryController", func() {
 								label, labelOk := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]
 								Expect(labelOk).Should(BeTrue())
 								Expect(label).Should(Equal("true"))
+								Expect(instance.Spec.AWS.NameOrID).Should(Equal("mock-db-instance-4"))
+								Expect(instance.Spec.AWS.ARN).ShouldNot(BeNil())
+								Expect(string(*instance.Spec.AWS.ARN)).Should(Equal("mock-db-instance-4"))
+							}
+							if instance, ok := dbInstancesMap["mock-db-instance-7"]; !ok {
+								return false
+							} else {
+								if !strings.HasPrefix(instance.Name, "rhoda-adopted-mysql-mock-db-instance-7") {
+									return false
+								}
+								typeString, typeOk := instance.GetAnnotations()[ophandler.TypeAnnotation]
+								Expect(typeOk).Should(BeTrue())
+								Expect(typeString).Should(Equal("RDSInventory.dbaas.redhat.com"))
+								namespacedNameString, nsnOk := instance.GetAnnotations()[ophandler.NamespacedNameAnnotation]
+								Expect(nsnOk).Should(BeTrue())
+								Expect(namespacedNameString).Should(Equal(testNamespace + "/" + inventoryName))
+								Expect(instance.Spec.Kubernetes.GroupKind.Kind).Should(Equal("DBInstance"))
+								Expect(instance.Spec.Kubernetes.GroupKind.Group).Should(Equal(rdsv1alpha1.GroupVersion.Group))
+								Expect(instance.Spec.Kubernetes.Metadata.Namespace).Should(Equal(testNamespace))
+								label, labelOk := instance.Spec.Kubernetes.Metadata.Labels["rds.dbaas.redhat.com/adopted"]
+								Expect(labelOk).Should(BeTrue())
+								Expect(label).Should(Equal("true"))
+								Expect(instance.Spec.AWS.NameOrID).Should(Equal("mock-db-instance-7"))
+								Expect(instance.Spec.AWS.ARN).ShouldNot(BeNil())
+								Expect(string(*instance.Spec.AWS.ARN)).Should(Equal("mock-db-instance-7"))
 							}
 							if _, ok := dbInstancesMap["mock-db-instance-5"]; ok {
 								return false
@@ -951,6 +1055,40 @@ var _ = Describe("RDSInventoryController", func() {
 							return err == nil
 						}, timeout).Should(BeTrue())
 
+						assertResourceCreation(mockDBInstance7)()
+						Eventually(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(mockDBInstance7), mockDBInstance7); err != nil {
+								return false
+							}
+							arn := ackv1alpha1.AWSResourceName("mock-db-instance-7")
+							ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+							region := ackv1alpha1.AWSRegion("us-east-1")
+							mockDBInstance7.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+								ARN:            &arn,
+								OwnerAccountID: &ownerAccountID,
+								Region:         &region,
+							}
+							err := k8sClient.Status().Update(ctx, mockDBInstance7)
+							return err == nil
+						}, timeout).Should(BeTrue())
+
+						assertResourceCreation(dbInstance15_0)()
+						Eventually(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance15_0), dbInstance15_0); err != nil {
+								return false
+							}
+							arn := ackv1alpha1.AWSResourceName("mock-adopted-db-instance-15-0")
+							ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+							region := ackv1alpha1.AWSRegion("us-east-1")
+							dbInstance15_0.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+								ARN:            &arn,
+								OwnerAccountID: &ownerAccountID,
+								Region:         &region,
+							}
+							err := k8sClient.Status().Update(ctx, dbInstance15_0)
+							return err == nil
+						}, timeout).Should(BeTrue())
+
 						Eventually(func() bool {
 							clusterDBInstanceList := &rdsv1alpha1.DBInstanceList{}
 							if e := k8sClient.List(ctx, clusterDBInstanceList, client.InNamespace(inventory.Namespace)); e != nil {
@@ -958,7 +1096,7 @@ var _ = Describe("RDSInventoryController", func() {
 							}
 							dbInstanceMap := map[string]rdsv1alpha1.DBInstance{}
 							for _, dbInstance := range clusterDBInstanceList.Items {
-								dbInstanceMap[*dbInstance.Spec.DBInstanceIdentifier] = dbInstance
+								dbInstanceMap[string(*dbInstance.Status.ACKResourceMetadata.ARN)] = dbInstance
 							}
 							if _, ok := dbInstanceMap["mock-db-instance-1"]; !ok {
 								return false
@@ -970,6 +1108,12 @@ var _ = Describe("RDSInventoryController", func() {
 								return false
 							}
 							if _, ok := dbInstanceMap["mock-db-instance-4"]; !ok {
+								return false
+							}
+							if _, ok := dbInstanceMap["mock-db-instance-7"]; !ok {
+								return false
+							}
+							if _, ok := dbInstanceMap["mock-adopted-db-instance-15-0"]; !ok {
 								return false
 							}
 							return true
@@ -990,7 +1134,7 @@ var _ = Describe("RDSInventoryController", func() {
 							if condition == nil || condition.Status != metav1.ConditionTrue || condition.Reason != "SyncOK" {
 								return false
 							}
-							if len(inv.Status.Instances) < 7 {
+							if len(inv.Status.Instances) < 9 {
 								return false
 							}
 							instancesMap := map[string]dbaasv1alpha1.Instance{}
@@ -1031,7 +1175,7 @@ var _ = Describe("RDSInventoryController", func() {
 							if _, ok := instancesMap[*dbInstance14.Spec.DBInstanceIdentifier]; ok {
 								return false
 							}
-							if _, ok := instancesMap[*dbInstance15.Spec.DBInstanceIdentifier]; ok {
+							if _, ok := instancesMap[*dbInstance15.Spec.DBInstanceIdentifier]; !ok {
 								return false
 							}
 							return true

@@ -101,6 +101,53 @@ func getDefaultDBName(engine string) *string {
 	}
 }
 
+func getDBEngineAbbreviation(engine *string) string {
+	if engine == nil {
+		return ""
+	}
+
+	switch *engine {
+	case mysql:
+		return "mysql-"
+	case mariadb:
+		return "mariadb-"
+	case aurora:
+		return "aurora-"
+	case auroraMysql:
+		return "aurora-mysql-"
+	case postgres:
+		return "postgres-"
+	case auroraPostgresql:
+		return "aurora-postgres-"
+	case sqlserverEe:
+		return "mssql-ee-"
+	case sqlserverSe:
+		return "mssql-se-"
+	case sqlserverEx:
+		return "mssql-ex-"
+	case sqlserverWeb:
+		return "mssql-web-"
+	case customSqlserverEe:
+		return "cust-mssql-ee-"
+	case customSqlserverSe:
+		return "cust-mssql-se-"
+	case customSqlserverWeb:
+		return "cust-mssql-web-"
+	case oracleSe2:
+		return "oracle-se2-"
+	case oracleSe2Cdb:
+		return "oracle-se2-cdb-"
+	case oracleEe:
+		return "oracle-ee-"
+	case oracleEeCdb:
+		return "oracle-ee-cdb-"
+	case customOracleEe:
+		return "cust-oracle-ee-"
+	default:
+		return ""
+	}
+}
+
 func generatePassword() string {
 	length := 12
 	buf := make([]byte, length)
