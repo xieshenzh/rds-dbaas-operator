@@ -69,7 +69,7 @@ const (
 const (
 	installNamespaceEnvVar = "INSTALL_NAMESPACE"
 	operatorConditionName  = "OPERATOR_CONDITION_NAME"
-	operatorConditionValue = "rds-dbaas-operator.v0.1.0"
+	operatorConditionValue = "rds-dbaas-operator.v0.2.0"
 )
 
 func TestAPIs(t *testing.T) {
