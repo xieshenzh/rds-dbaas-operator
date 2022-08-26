@@ -67,6 +67,12 @@ const (
 	ackWatchNamespace           = "ACK_WATCH_NAMESPACE"
 	awsEndpointUrl              = "AWS_ENDPOINT_URL"
 
+	awsAccessKeyIDHelpText     = "The AWS Access Key ID is the value associated with a user's security credentials within the IAM console."
+	awsSecretAccessKeyHelpText = "The AWS Secret Access Key is the value associated with a user's security credentials within the IAM console."
+	awsRegionHelpText          = "The geographical region where your AWS resources reside."
+	ackResourceTagsHelpText    = "Optionally, you can set key:value pair tags on resources managed by the service controller."
+	ackLogLevelHelpText        = "Optionally, you can set the logging level on the RDS controller for OpenShift Database Access. The default value is \"info\". The only valid values are \"info\", and \"debug\"."
+
 	secretName    = "ack-rds-user-secrets" //#nosec G101
 	configmapName = "ack-rds-user-config"
 
