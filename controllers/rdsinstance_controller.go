@@ -510,7 +510,7 @@ func setCredentials(ctx context.Context, cli client.Client, scheme *runtime.Sche
 	namespace string, owner metav1.Object, kind string) (*v1.Secret, error) {
 	logger := log.FromContext(ctx)
 
-	secretName := fmt.Sprintf("%s-credentials", dbInstance.GetName())
+	secretName := fmt.Sprintf("%s-instance-credentials", dbInstance.GetName())
 	secret := &v1.Secret{}
 	if e := cli.Get(ctx, client.ObjectKey{Namespace: namespace, Name: secretName}, secret); e != nil {
 		if errors.IsNotFound(e) {

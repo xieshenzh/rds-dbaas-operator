@@ -1264,7 +1264,7 @@ var _ = Describe("RDSInventoryController", func() {
 						}
 						dbSecret3 := &v1.Secret{
 							ObjectMeta: metav1.ObjectMeta{
-								Name:      "db-instance-inventory-controller-3-credentials",
+								Name:      "db-instance-inventory-controller-3-instance-credentials",
 								Namespace: testNamespace,
 							},
 						}
@@ -1283,7 +1283,7 @@ var _ = Describe("RDSInventoryController", func() {
 							}
 							Expect(dbInstance3.Spec.MasterUserPassword.Key).Should(Equal("password"))
 							Expect(dbInstance3.Spec.MasterUserPassword.Namespace).Should(Equal(testNamespace))
-							Expect(dbInstance3.Spec.MasterUserPassword.Name).Should(Equal("db-instance-inventory-controller-3-credentials"))
+							Expect(dbInstance3.Spec.MasterUserPassword.Name).Should(Equal("db-instance-inventory-controller-3-instance-credentials"))
 							err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret3), dbSecret3)
 							Expect(err).ShouldNot(HaveOccurred())
 							v, ok := dbSecret3.Data["password"]

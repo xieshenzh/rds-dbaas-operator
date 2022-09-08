@@ -43,7 +43,7 @@ import (
 const (
 	instanceIDKey = ".spec.instanceID"
 
-	databaseProvider = "Red Hat DBaaS / Amazon Relational Database Service (RDS)"
+	databaseProvider = "rhoda/amazon rds"
 
 	connectionConditionReady = "ReadyForBinding"
 
@@ -57,7 +57,6 @@ const (
 	connectionStatusMessageUpdateError       = "Failed to update Connection"
 	connectionStatusMessageUpdating          = "Updating Connection"
 	connectionStatusMessageSecretError       = "Failed to create or update secret"
-	connectionStatusMessageConfigMapError    = "Failed to create or update configmap"
 	connectionStatusMessageInstanceNotFound  = "Instance not found"
 	connectionStatusMessageInstanceNotReady  = "Instance not ready"
 	connectionStatusMessageGetInstanceError  = "Failed to get Instance"
@@ -221,15 +220,7 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			return true
 		}
 
-		dbConfigMap, e := r.createOrUpdateConfigMap(ctx, &connection, &dbInstance)
-		if e != nil {
-			logger.Error(e, "Failed to create or update configmap for Connection")
-			returnError(e, connectionStatusReasonBackendError, connectionStatusMessageConfigMapError)
-			return true
-		}
-
-		connection.Status.CredentialsRef = &v1.LocalObjectReference{Name: userSecret.Name}
-		connection.Status.ConnectionInfoRef = &v1.LocalObjectReference{Name: dbConfigMap.Name}
+		connection.Status.Binding = &v1.LocalObjectReference{Name: userSecret.Name}
 		if e := r.Status().Update(ctx, &connection); e != nil {
 			if errors.IsConflict(e) {
 				logger.Info("Connection modified, retry reconciling")
@@ -290,7 +281,7 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 func (r *RDSConnectionReconciler) createOrUpdateSecret(ctx context.Context, connection *rdsdbaasv1alpha1.RDSConnection,
 	dbSecret *v1.Secret, dbInstance *rdsv1alpha1.DBInstance) (*v1.Secret, error) {
-	secretName := fmt.Sprintf("%s-credentials", connection.Name)
+	secretName := fmt.Sprintf("%s-connection-credentials", connection.Name)
 	secret := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
@@ -303,6 +294,7 @@ func (r *RDSConnectionReconciler) createOrUpdateSecret(ctx context.Context, conn
 		if err := ctrl.SetControllerReference(connection, secret, r.Scheme); err != nil {
 			return err
 		}
+		secret.Type = v1.SecretType(fmt.Sprintf("servicebinding.io/%s", generateBindingType(*dbInstance.Spec.Engine)))
 		setSecret(secret, dbSecret, dbInstance)
 		return nil
 	})
@@ -316,72 +308,43 @@ func setSecret(secret *v1.Secret, dbSecret *v1.Secret, dbInstance *rdsv1alpha1.D
 	data := map[string][]byte{
 		"username": []byte(*dbInstance.Spec.MasterUsername),
 		"password": dbSecret.Data[dbInstance.Spec.MasterUserPassword.Key],
+		"type":     []byte(generateBindingType(*dbInstance.Spec.Engine)),
+		"provider": []byte(databaseProvider),
+		"host":     []byte(*dbInstance.Status.Endpoint.Address),
+		"port":     []byte(strconv.FormatInt(*dbInstance.Status.Endpoint.Port, 10)),
 	}
-	secret.Data = data
-}
 
-func (r *RDSConnectionReconciler) createOrUpdateConfigMap(ctx context.Context, connection *rdsdbaasv1alpha1.RDSConnection,
-	dbInstance *rdsv1alpha1.DBInstance) (*v1.ConfigMap, error) {
-	cmName := fmt.Sprintf("%s-configs", connection.Name)
-	cm := &v1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cmName,
-			Namespace: connection.Namespace,
-		},
-	}
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, cm, func() error {
-		cm.ObjectMeta.Labels = buildConnectionLabels()
-		cm.ObjectMeta.Annotations = buildConnectionAnnotations(connection, &cm.ObjectMeta)
-		if err := ctrl.SetControllerReference(connection, cm, r.Scheme); err != nil {
-			return err
-		}
-		setConfigMap(cm, dbInstance)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return cm, nil
-}
-
-func setConfigMap(cm *v1.ConfigMap, dbInstance *rdsv1alpha1.DBInstance) {
-	dataMap := map[string]string{
-		"type":     generateBindingType(*dbInstance.Spec.Engine),
-		"provider": databaseProvider,
-		"host":     *dbInstance.Status.Endpoint.Address,
-		"port":     strconv.FormatInt(*dbInstance.Status.Endpoint.Port, 10),
-	}
 	if dbInstance.Spec.DBName != nil {
-		dataMap["database"] = *dbInstance.Spec.DBName
+		data["database"] = []byte(*dbInstance.Spec.DBName)
 	} else if dbInstance.Spec.Engine != nil {
 		if dbName := getDefaultDBName(*dbInstance.Spec.Engine); dbName != nil {
-			dataMap["database"] = *dbName
+			data["database"] = []byte(*dbName)
 		}
 	}
 
 	if dbInstance.Spec.Engine != nil {
-		host := dataMap["host"]
-		port := dataMap["port"]
-		db, dbOk := dataMap["database"]
+		host := data["host"]
+		port := data["port"]
+		db, dbOk := data["database"]
 
 		switch *dbInstance.Spec.Engine {
 		case oracleSe2, oracleSe2Cdb, oracleEe, oracleEeCdb, customOracleEe:
 			if dbOk {
-				dataMap["jdbc-url"] = fmt.Sprintf("jdbc:oracle:thin:@%s:%s/%s", host, port, db)
+				data["jdbc-url"] = []byte(fmt.Sprintf("jdbc:oracle:thin:@%s:%s/%s", host, port, db))
 			} else {
-				dataMap["jdbc-url"] = fmt.Sprintf("jdbc:oracle:thin:@%s:%s", host, port)
+				data["jdbc-url"] = []byte(fmt.Sprintf("jdbc:oracle:thin:@%s:%s", host, port))
 			}
 		case sqlserverEe, sqlserverSe, sqlserverEx, sqlserverWeb, customSqlserverEe, customSqlserverSe, customSqlserverWeb:
 			if dbOk {
-				dataMap["jdbc-url"] = fmt.Sprintf("jdbc:sqlserver://%s:%s;databaseName=%s", host, port, db)
+				data["jdbc-url"] = []byte(fmt.Sprintf("jdbc:sqlserver://%s:%s;databaseName=%s", host, port, db))
 			} else {
-				dataMap["jdbc-url"] = fmt.Sprintf("jdbc:sqlserver://%s:%s", host, port)
+				data["jdbc-url"] = []byte(fmt.Sprintf("jdbc:sqlserver://%s:%s", host, port))
 			}
 		default:
 		}
 	}
 
-	cm.Data = dataMap
+	secret.Data = data
 }
 
 func buildConnectionLabels() map[string]string {

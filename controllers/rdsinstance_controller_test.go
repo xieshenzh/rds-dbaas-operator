@@ -437,7 +437,7 @@ var _ = Describe("RDSInstanceController", func() {
 								Expect(dbInstance.Spec.MasterUserPassword).ShouldNot(BeNil())
 								Expect(dbInstance.Spec.MasterUserPassword.Key).Should(Equal("password"))
 								Expect(dbInstance.Spec.MasterUserPassword.Namespace).Should(Equal(testNamespace))
-								Expect(dbInstance.Spec.MasterUserPassword.Name).Should(Equal(fmt.Sprintf("%s-credentials", instanceName)))
+								Expect(dbInstance.Spec.MasterUserPassword.Name).Should(Equal(fmt.Sprintf("%s-instance-credentials", instanceName)))
 
 								typeString, typeOk := dbInstance.GetAnnotations()[ophandler.TypeAnnotation]
 								Expect(typeOk).Should(BeTrue())
@@ -451,7 +451,7 @@ var _ = Describe("RDSInstanceController", func() {
 							By("checking if the Secret for DB user is created")
 							dbSecret := &v1.Secret{
 								ObjectMeta: metav1.ObjectMeta{
-									Name:      fmt.Sprintf("%s-credentials", instanceName),
+									Name:      fmt.Sprintf("%s-instance-credentials", instanceName),
 									Namespace: testNamespace,
 								},
 							}

@@ -511,17 +511,15 @@ var _ = Describe("RDSConnectionController", func() {
 															if condition == nil || condition.Status != metav1.ConditionTrue || condition.Reason != "Ready" {
 																return false
 															}
-															Expect(conn.Status.CredentialsRef).ShouldNot(BeNil())
-															Expect(conn.Status.CredentialsRef.Name).Should(Equal(fmt.Sprintf("%s-credentials", conn.Name)))
-															Expect(conn.Status.ConnectionInfoRef).ShouldNot(BeNil())
-															Expect(conn.Status.ConnectionInfoRef.Name).Should(Equal(fmt.Sprintf("%s-configs", conn.Name)))
+															Expect(conn.Status.Binding).ShouldNot(BeNil())
+															Expect(conn.Status.Binding.Name).Should(Equal(fmt.Sprintf("%s-connection-credentials", conn.Name)))
 															return true
 														}, timeout).Should(BeTrue())
 
 														By("checking the Secret of the Connection")
 														secret := &v1.Secret{
 															ObjectMeta: metav1.ObjectMeta{
-																Name:      conn.Status.CredentialsRef.Name,
+																Name:      conn.Status.Binding.Name,
 																Namespace: testNamespace,
 															},
 														}
@@ -535,45 +533,28 @@ var _ = Describe("RDSConnectionController", func() {
 														Expect(*secretOwner.Controller).Should(BeTrue())
 														Expect(secretOwner.BlockOwnerDeletion).ShouldNot(BeNil())
 														Expect(*secretOwner.BlockOwnerDeletion).Should(BeTrue())
+														Expect(string(secret.Type)).Should(Equal(fmt.Sprintf("servicebinding.io/%s", "postgresql")))
 														user, userOk := secret.Data["username"]
 														Expect(userOk).Should(BeTrue())
 														Expect(string(user)).Should(Equal("user-connection-controller"))
 														password, passwordOk := secret.Data["password"]
 														Expect(passwordOk).Should(BeTrue())
 														Expect(string(password)).Should(Equal("testpassword"))
-
-														By("checking the ConfigMap of the Connection")
-														configmap := &v1.ConfigMap{
-															ObjectMeta: metav1.ObjectMeta{
-																Name:      conn.Status.ConnectionInfoRef.Name,
-																Namespace: testNamespace,
-															},
-														}
-														err = k8sClient.Get(ctx, client.ObjectKeyFromObject(configmap), configmap)
-														Expect(err).ShouldNot(HaveOccurred())
-														configmapOwner := metav1.GetControllerOf(configmap)
-														Expect(configmapOwner).ShouldNot(BeNil())
-														Expect(configmapOwner.Kind).Should(Equal("RDSConnection"))
-														Expect(configmapOwner.Name).Should(Equal(conn.Name))
-														Expect(configmapOwner.Controller).ShouldNot(BeNil())
-														Expect(*configmapOwner.Controller).Should(BeTrue())
-														Expect(configmapOwner.BlockOwnerDeletion).ShouldNot(BeNil())
-														Expect(*configmapOwner.BlockOwnerDeletion).Should(BeTrue())
-														t, typeOk := configmap.Data["type"]
+														t, typeOk := secret.Data["type"]
 														Expect(typeOk).Should(BeTrue())
-														Expect(t).Should(Equal("postgresql"))
-														provider, providerOk := configmap.Data["provider"]
+														Expect(string(t)).Should(Equal("postgresql"))
+														provider, providerOk := secret.Data["provider"]
 														Expect(providerOk).Should(BeTrue())
-														Expect(provider).Should(Equal("Red Hat DBaaS / Amazon Relational Database Service (RDS)"))
-														host, hostOk := configmap.Data["host"]
+														Expect(string(provider)).Should(Equal("rhoda/amazon rds"))
+														host, hostOk := secret.Data["host"]
 														Expect(hostOk).Should(BeTrue())
-														Expect(host).Should(Equal("address-connection-controller"))
-														port, portOk := configmap.Data["port"]
+														Expect(string(host)).Should(Equal("address-connection-controller"))
+														port, portOk := secret.Data["port"]
 														Expect(portOk).Should(BeTrue())
-														Expect(port).Should(Equal("9000"))
-														db, dbOk := configmap.Data["database"]
+														Expect(string(port)).Should(Equal("9000"))
+														db, dbOk := secret.Data["database"]
 														Expect(dbOk).Should(BeTrue())
-														Expect(db).Should(Equal("postgres"))
+														Expect(string(db)).Should(Equal("postgres"))
 													})
 												})
 											})
@@ -683,40 +664,44 @@ var _ = Describe("RDSConnectionController", func() {
 						if condition == nil || condition.Status != metav1.ConditionTrue || condition.Reason != "Ready" {
 							return false
 						}
-						Expect(conn.Status.CredentialsRef).ShouldNot(BeNil())
-						Expect(conn.Status.CredentialsRef.Name).Should(Equal(fmt.Sprintf("%s-credentials", conn.Name)))
-						Expect(conn.Status.ConnectionInfoRef).ShouldNot(BeNil())
-						Expect(conn.Status.ConnectionInfoRef.Name).Should(Equal(fmt.Sprintf("%s-configs", conn.Name)))
+						Expect(conn.Status.Binding).ShouldNot(BeNil())
+						Expect(conn.Status.Binding.Name).Should(Equal(fmt.Sprintf("%s-connection-credentials", conn.Name)))
 						return true
 					}, timeout).Should(BeTrue())
 
 					By("checking the ConfigMap of the Connection")
-					configmap := &v1.ConfigMap{
+					secret := &v1.Secret{
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      conn.Status.ConnectionInfoRef.Name,
+							Name:      conn.Status.Binding.Name,
 							Namespace: testNamespace,
 						},
 					}
-					err := k8sClient.Get(ctx, client.ObjectKeyFromObject(configmap), configmap)
+					err := k8sClient.Get(ctx, client.ObjectKeyFromObject(secret), secret)
 					Expect(err).ShouldNot(HaveOccurred())
-					ju, juOk := configmap.Data["jdbc-url"]
+					user, userOk := secret.Data["username"]
+					Expect(userOk).Should(BeTrue())
+					Expect(string(user)).Should(Equal("user-oracle-connection-controller"))
+					password, passwordOk := secret.Data["password"]
+					Expect(passwordOk).Should(BeTrue())
+					Expect(string(password)).Should(Equal("testpassword"))
+					ju, juOk := secret.Data["jdbc-url"]
 					Expect(juOk).Should(BeTrue())
-					Expect(ju).Should(Equal("jdbc:oracle:thin:@address-oracle-connection-controller:9000/ORCL"))
-					t, typeOk := configmap.Data["type"]
+					Expect(string(ju)).Should(Equal("jdbc:oracle:thin:@address-oracle-connection-controller:9000/ORCL"))
+					t, typeOk := secret.Data["type"]
 					Expect(typeOk).Should(BeTrue())
-					Expect(t).Should(Equal("oracle"))
-					provider, providerOk := configmap.Data["provider"]
+					Expect(string(t)).Should(Equal("oracle"))
+					provider, providerOk := secret.Data["provider"]
 					Expect(providerOk).Should(BeTrue())
-					Expect(provider).Should(Equal("Red Hat DBaaS / Amazon Relational Database Service (RDS)"))
-					host, hostOk := configmap.Data["host"]
+					Expect(string(provider)).Should(Equal("rhoda/amazon rds"))
+					host, hostOk := secret.Data["host"]
 					Expect(hostOk).Should(BeTrue())
-					Expect(host).Should(Equal("address-oracle-connection-controller"))
-					port, portOk := configmap.Data["port"]
+					Expect(string(host)).Should(Equal("address-oracle-connection-controller"))
+					port, portOk := secret.Data["port"]
 					Expect(portOk).Should(BeTrue())
-					Expect(port).Should(Equal("9000"))
-					db, dbOk := configmap.Data["database"]
+					Expect(string(port)).Should(Equal("9000"))
+					db, dbOk := secret.Data["database"]
 					Expect(dbOk).Should(BeTrue())
-					Expect(db).Should(Equal("ORCL"))
+					Expect(string(db)).Should(Equal("ORCL"))
 				})
 			})
 
@@ -769,40 +754,44 @@ var _ = Describe("RDSConnectionController", func() {
 						if condition == nil || condition.Status != metav1.ConditionTrue || condition.Reason != "Ready" {
 							return false
 						}
-						Expect(conn.Status.CredentialsRef).ShouldNot(BeNil())
-						Expect(conn.Status.CredentialsRef.Name).Should(Equal(fmt.Sprintf("%s-credentials", conn.Name)))
-						Expect(conn.Status.ConnectionInfoRef).ShouldNot(BeNil())
-						Expect(conn.Status.ConnectionInfoRef.Name).Should(Equal(fmt.Sprintf("%s-configs", conn.Name)))
+						Expect(conn.Status.Binding).ShouldNot(BeNil())
+						Expect(conn.Status.Binding.Name).Should(Equal(fmt.Sprintf("%s-connection-credentials", conn.Name)))
 						return true
 					}, timeout).Should(BeTrue())
 
 					By("checking the ConfigMap of the Connection")
-					configmap := &v1.ConfigMap{
+					secret := &v1.Secret{
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      conn.Status.ConnectionInfoRef.Name,
+							Name:      conn.Status.Binding.Name,
 							Namespace: testNamespace,
 						},
 					}
-					err := k8sClient.Get(ctx, client.ObjectKeyFromObject(configmap), configmap)
+					err := k8sClient.Get(ctx, client.ObjectKeyFromObject(secret), secret)
 					Expect(err).ShouldNot(HaveOccurred())
-					ju, juOk := configmap.Data["jdbc-url"]
+					user, userOk := secret.Data["username"]
+					Expect(userOk).Should(BeTrue())
+					Expect(string(user)).Should(Equal("user-sqlserver-connection-controller"))
+					password, passwordOk := secret.Data["password"]
+					Expect(passwordOk).Should(BeTrue())
+					Expect(string(password)).Should(Equal("testpassword"))
+					ju, juOk := secret.Data["jdbc-url"]
 					Expect(juOk).Should(BeTrue())
-					Expect(ju).Should(Equal("jdbc:sqlserver://address-sqlserver-connection-controller:9000;databaseName=master"))
-					t, typeOk := configmap.Data["type"]
+					Expect(string(ju)).Should(Equal("jdbc:sqlserver://address-sqlserver-connection-controller:9000;databaseName=master"))
+					t, typeOk := secret.Data["type"]
 					Expect(typeOk).Should(BeTrue())
-					Expect(t).Should(Equal("sqlserver"))
-					provider, providerOk := configmap.Data["provider"]
+					Expect(string(t)).Should(Equal("sqlserver"))
+					provider, providerOk := secret.Data["provider"]
 					Expect(providerOk).Should(BeTrue())
-					Expect(provider).Should(Equal("Red Hat DBaaS / Amazon Relational Database Service (RDS)"))
-					host, hostOk := configmap.Data["host"]
+					Expect(string(provider)).Should(Equal("rhoda/amazon rds"))
+					host, hostOk := secret.Data["host"]
 					Expect(hostOk).Should(BeTrue())
-					Expect(host).Should(Equal("address-sqlserver-connection-controller"))
-					port, portOk := configmap.Data["port"]
+					Expect(string(host)).Should(Equal("address-sqlserver-connection-controller"))
+					port, portOk := secret.Data["port"]
 					Expect(portOk).Should(BeTrue())
-					Expect(port).Should(Equal("9000"))
-					db, dbOk := configmap.Data["database"]
+					Expect(string(port)).Should(Equal("9000"))
+					db, dbOk := secret.Data["database"]
 					Expect(dbOk).Should(BeTrue())
-					Expect(db).Should(Equal("master"))
+					Expect(string(db)).Should(Equal("master"))
 				})
 			})
 		})
