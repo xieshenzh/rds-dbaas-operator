@@ -95,16 +95,6 @@ const (
 	instanceStatusMessageInventoryNotReady   = "Inventory not ready"
 	instanceStatusMessageGetInventoryError   = "Failed to get Inventory"
 
-	instancePhasePending  = "Pending"
-	instancePhaseCreating = "Creating"
-	instancePhaseUpdating = "Updating"
-	instancePhaseDeleting = "Deleting"
-	instancePhaseDeleted  = "Deleted"
-	instancePhaseReady    = "Ready"
-	instancePhaseError    = "Error"
-	instancePhaseFailed   = "Failed"
-	instancePhaseUnknown  = "Unknown"
-
 	requiredParameterErrorTemplate = "required parameter %s is missing"
 	invalidParameterErrorTemplate  = "value of parameter %s is invalid"
 )
@@ -131,7 +121,8 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	var inventory rdsdbaasv1alpha1.RDSInventory
 	var instance rdsdbaasv1alpha1.RDSInstance
 
-	var provisionStatus, provisionStatusReason, provisionStatusMessage, phase string
+	var provisionStatus, provisionStatusReason, provisionStatusMessage string
+	var phase dbaasv1alpha1.DBaasInstancePhase
 
 	returnUpdating := func() {
 		result = ctrl.Result{Requeue: true}
@@ -188,6 +179,8 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		apimeta.SetStatusCondition(&instance.Status.Conditions, condition)
 		if len(phase) > 0 {
 			instance.Status.Phase = phase
+		} else if len(instance.Status.Phase) == 0 {
+			instance.Status.Phase = dbaasv1alpha1.InstancePhaseUnknown
 		}
 		if e := r.Status().Update(ctx, &instance); e != nil {
 			if errors.IsConflict(e) {
@@ -205,7 +198,7 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	checkFinalizer := func() bool {
 		if instance.ObjectMeta.DeletionTimestamp.IsZero() {
 			if !controllerutil.ContainsFinalizer(&instance, instanceFinalizer) {
-				phase = instancePhasePending
+				phase = dbaasv1alpha1.InstancePhasePending
 				controllerutil.AddFinalizer(&instance, instanceFinalizer)
 				if e := r.Update(ctx, &instance); e != nil {
 					if errors.IsConflict(e) {
@@ -223,7 +216,7 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			}
 		} else {
 			if controllerutil.ContainsFinalizer(&instance, instanceFinalizer) {
-				phase = instancePhaseDeleting
+				phase = dbaasv1alpha1.InstancePhaseDeleting
 				dbInstance := &rdsv1alpha1.DBInstance{}
 				if e := r.Get(ctx, client.ObjectKey{Namespace: instance.Spec.InventoryRef.Namespace, Name: instance.Name}, dbInstance); e != nil {
 					if !errors.IsNotFound(e) {
@@ -253,7 +246,7 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 					return true
 				}
 				logger.Info("Finalizer removed from Instance")
-				phase = instancePhaseDeleted
+				phase = dbaasv1alpha1.InstancePhaseDeleted
 				returnNotReady(instanceStatusReasonUpdating, instanceStatusMessageUpdating)
 				return true
 			}
@@ -291,11 +284,11 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			returnError(e, "", instanceStatusMessageCreateOrUpdateError)
 			return true
 		} else if r == controllerutil.OperationResultCreated {
-			phase = instancePhaseCreating
+			phase = dbaasv1alpha1.InstancePhaseCreating
 			returnRequeue(instanceStatusReasonCreating, instanceStatusMessageCreating)
 			return true
 		} else if r == controllerutil.OperationResultUpdated {
-			phase = instancePhaseUpdating
+			phase = dbaasv1alpha1.InstancePhaseUpdating
 		}
 		return false
 	}
@@ -403,13 +396,14 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	switch instance.Status.Phase {
-	case instancePhaseReady:
+	case dbaasv1alpha1.InstancePhaseReady:
 		returnReady()
-	case instancePhaseFailed, instancePhaseDeleted:
-		returnNotReady(instanceStatusReasonTerminated, instance.Status.Phase)
-	case instancePhasePending, instancePhaseCreating, instancePhaseUpdating, instancePhaseDeleting:
+	case dbaasv1alpha1.InstancePhaseFailed, dbaasv1alpha1.InstancePhaseDeleted:
+		returnNotReady(instanceStatusReasonTerminated, string(instance.Status.Phase))
+	case dbaasv1alpha1.InstancePhasePending, dbaasv1alpha1.InstancePhaseCreating,
+		dbaasv1alpha1.InstancePhaseUpdating, dbaasv1alpha1.InstancePhaseDeleting:
 		returnUpdating()
-	case instancePhaseError, instancePhaseUnknown:
+	case dbaasv1alpha1.InstancePhaseError, dbaasv1alpha1.InstancePhaseUnknown:
 		returnRequeue(instanceStatusReasonBackendError, instanceStatusMessageError)
 	default:
 	}
@@ -598,24 +592,24 @@ func setDBInstancePhase(dbInstance *rdsv1alpha1.DBInstance, rdsInstance *rdsdbaa
 	}
 	switch status {
 	case "available":
-		rdsInstance.Status.Phase = instancePhaseReady
+		rdsInstance.Status.Phase = dbaasv1alpha1.InstancePhaseReady
 	case "creating":
-		rdsInstance.Status.Phase = instancePhaseCreating
+		rdsInstance.Status.Phase = dbaasv1alpha1.InstancePhaseCreating
 	case "deleting":
-		rdsInstance.Status.Phase = instancePhaseDeleting
+		rdsInstance.Status.Phase = dbaasv1alpha1.InstancePhaseDeleting
 	case "failed":
-		rdsInstance.Status.Phase = instancePhaseFailed
+		rdsInstance.Status.Phase = dbaasv1alpha1.InstancePhaseFailed
 	case "inaccessible-encryption-credentials-recoverable", "incompatible-parameters", "restore-error":
-		rdsInstance.Status.Phase = instancePhaseError
+		rdsInstance.Status.Phase = dbaasv1alpha1.InstancePhaseError
 	case "backing-up", "configuring-enhanced-monitoring", "configuring-iam-database-auth", "configuring-log-exports",
 		"converting-to-vpc", "maintenance", "modifying", "moving-to-vpc", "rebooting", "resetting-master-credentials",
 		"renaming", "starting", "stopping", "storage-optimization", "upgrading":
-		rdsInstance.Status.Phase = instancePhaseUpdating
+		rdsInstance.Status.Phase = dbaasv1alpha1.InstancePhaseUpdating
 	case "inaccessible-encryption-credentials", "incompatible-network", "incompatible-option-group", "incompatible-restore",
 		"insufficient-capacity", "stopped", "storage-full":
-		rdsInstance.Status.Phase = instancePhaseUnknown
+		rdsInstance.Status.Phase = dbaasv1alpha1.InstancePhaseUnknown
 	default:
-		rdsInstance.Status.Phase = instancePhaseUnknown
+		rdsInstance.Status.Phase = dbaasv1alpha1.InstancePhaseUnknown
 	}
 }
 
