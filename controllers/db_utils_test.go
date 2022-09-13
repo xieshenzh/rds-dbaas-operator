@@ -150,6 +150,37 @@ var _ = Describe("DbUtils", func() {
 		)
 	})
 
+	Context("Generate DB Engine Abbreviation", func() {
+		DescribeTable("checking getDBEngineAbbreviation",
+			func(engine *string, abbr string) {
+				n := getDBEngineAbbreviation(engine)
+				Expect(n).Should(Equal(abbr))
+			},
+
+			Entry("aurora", pointer.String("aurora"), "aurora-"),
+			Entry("aurora-mysql", pointer.String("aurora-mysql"), "aurora-mysql-"),
+			Entry("aurora-postgresql", pointer.String("aurora-postgresql"), "aurora-postgres-"),
+			Entry("custom-oracle-ee", pointer.String("custom-oracle-ee"), "cust-oracle-ee-"),
+			Entry("mariadb", pointer.String("mariadb"), "mariadb-"),
+			Entry("mysql", pointer.String("mysql"), "mysql-"),
+			Entry("oracle-ee", pointer.String("oracle-ee"), "oracle-ee-"),
+			Entry("oracle-ee-cdb", pointer.String("oracle-ee-cdb"), "oracle-ee-cdb-"),
+			Entry("oracle-se2", pointer.String("oracle-se2"), "oracle-se2-"),
+			Entry("oracle-se2-cdb", pointer.String("oracle-se2-cdb"), "oracle-se2-cdb-"),
+			Entry("postgres", pointer.String("postgres"), "postgres-"),
+			Entry("sqlserver-ee", pointer.String("sqlserver-ee"), "mssql-ee-"),
+			Entry("sqlserver-se", pointer.String("sqlserver-se"), "mssql-se-"),
+			Entry("sqlserver-ex", pointer.String("sqlserver-ex"), "mssql-ex-"),
+			Entry("sqlserver-web", pointer.String("sqlserver-web"), "mssql-web-"),
+			Entry("custom-sqlserver-ee", pointer.String("custom-sqlserver-ee"), "cust-mssql-ee-"),
+			Entry("custom-sqlserver-se", pointer.String("custom-sqlserver-se"), "cust-mssql-se-"),
+			Entry("custom-sqlserver-web", pointer.String("custom-sqlserver-web"), "cust-mssql-web-"),
+			Entry("Invalid", pointer.String("invalid"), ""),
+			Entry("Blank", pointer.String(""), ""),
+			Entry("Nil", nil, ""),
+		)
+	})
+
 	Context("Generate Password", func() {
 		DescribeTable("checking generatePassword",
 			func() {

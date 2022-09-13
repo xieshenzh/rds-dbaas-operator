@@ -33,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -410,9 +411,12 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				return true, false
 			}
 
-			dbInstanceMap := make(map[string]rdsv1alpha1.DBInstance, len(clusterDBInstanceList.Items))
+			dbInstanceMap := make(map[string]string, len(clusterDBInstanceList.Items))
 			for _, dbInstance := range clusterDBInstanceList.Items {
-				dbInstanceMap[*dbInstance.Spec.DBInstanceIdentifier] = dbInstance
+				if dbInstance.Spec.DBInstanceIdentifier != nil &&
+					dbInstance.Status.ACKResourceMetadata != nil && dbInstance.Status.ACKResourceMetadata.ARN != nil {
+					dbInstanceMap[string(*dbInstance.Status.ACKResourceMetadata.ARN)] = *dbInstance.Spec.DBInstanceIdentifier
+				}
 			}
 
 			adoptedResourceList := &ackv1alpha1.AdoptedResourceList{}
@@ -421,15 +425,22 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetInstancesError)
 				return true, false
 			}
-			adoptedDBInstanceMap := make(map[string]ackv1alpha1.AdoptedResource, len(adoptedResourceList.Items))
+			adoptedDBInstanceMap := make(map[string]string, len(adoptedResourceList.Items))
 			for _, adoptedDBInstance := range adoptedResourceList.Items {
-				adoptedDBInstanceMap[adoptedDBInstance.Spec.AWS.NameOrID] = adoptedDBInstance
+				if adoptedDBInstance.Spec.AWS != nil && adoptedDBInstance.Spec.AWS.ARN != nil {
+					adoptedDBInstanceMap[string(*adoptedDBInstance.Spec.AWS.ARN)] = adoptedDBInstance.Spec.AWS.NameOrID
+				}
 			}
 
 			adoptingResource := false
 			for i := range awsDBInstances {
 				dbInstance := awsDBInstances[i]
-				awsDBInstanceMap[*dbInstance.DBInstanceIdentifier] = dbInstance
+
+				if dbInstance.DBInstanceArn == nil {
+					continue
+				}
+				awsDBInstanceMap[*dbInstance.DBInstanceArn] = dbInstance
+
 				if dbInstance.Engine == nil {
 					continue
 				} else {
@@ -445,25 +456,32 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				if dbInstance.DBInstanceStatus != nil && *dbInstance.DBInstanceStatus == "deleting" {
 					continue
 				}
-				if _, ok := dbInstanceMap[*dbInstance.DBInstanceIdentifier]; !ok {
-					adoptingResource = true
-					if _, ok := adoptedDBInstanceMap[*dbInstance.DBInstanceIdentifier]; !ok {
-						adoptedDBInstance := createAdoptedResource(&dbInstance, &inventory)
-						if e := ophandler.SetOwnerAnnotations(&inventory, adoptedDBInstance); e != nil {
-							logger.Error(e, "Failed to create adopted DB Instance in the cluster")
-							returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageAdoptInstanceError)
-							return true, false
-						}
-						if e := r.Create(ctx, adoptedDBInstance); e != nil {
-							logger.Error(e, "Failed to create adopted DB Instance in the cluster")
-							returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageAdoptInstanceError)
-							return true, false
-						}
-					}
+
+				if _, ok := dbInstanceMap[*dbInstance.DBInstanceArn]; ok {
+					continue
+				}
+				adoptingResource = true
+				logger.Info("Adopting DB Instance", "DB Instance Identifier", *dbInstance.DBInstanceIdentifier, "ARN", *dbInstance.DBInstanceArn)
+
+				if _, ok := adoptedDBInstanceMap[*dbInstance.DBInstanceIdentifier]; ok {
+					continue
+				}
+
+				adoptedDBInstance := createAdoptedResource(&dbInstance, &inventory)
+				if e := ophandler.SetOwnerAnnotations(&inventory, adoptedDBInstance); e != nil {
+					logger.Error(e, "Failed to create adopted DB Instance in the cluster")
+					returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageAdoptInstanceError)
+					return true, false
+				}
+				if e := r.Create(ctx, adoptedDBInstance); e != nil {
+					logger.Error(e, "Failed to create adopted DB Instance in the cluster")
+					returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageAdoptInstanceError)
+					return true, false
 				}
 			}
+
 			if adoptingResource {
-				logger.Info("DB Instance adopted")
+				logger.Info("Adopting DB Instance")
 				returnRequeueSyncReset()
 				return true, false
 			}
@@ -498,11 +516,8 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			if adoptedDBInstance.Status.ACKResourceMetadata == nil || adoptedDBInstance.Status.ACKResourceMetadata.ARN == nil {
 				continue
 			}
-			awsDBInstance, awsOk := awsDBInstanceMap[*adoptedDBInstance.Spec.DBInstanceIdentifier]
+			awsDBInstance, awsOk := awsDBInstanceMap[string(*adoptedDBInstance.Status.ACKResourceMetadata.ARN)]
 			if !awsOk {
-				continue
-			} else if awsDBInstance.DBInstanceArn == nil ||
-				*awsDBInstance.DBInstanceArn != string(*adoptedDBInstance.Status.ACKResourceMetadata.ARN) {
 				continue
 			}
 
@@ -533,6 +548,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			if adoptedDBInstance.Spec.MasterUserPassword == nil {
 				if adoptedDBInstance.Status.DBInstanceStatus == nil || *adoptedDBInstance.Status.DBInstanceStatus != "available" {
 					waitForAdoptedResource = true
+					logger.Info("DB Instance is not available to reset credentials", "DB Instance Identifier", *adoptedDBInstance.Spec.DBInstanceIdentifier)
 					continue
 				}
 				s, e := setCredentials(ctx, r.Client, r.Scheme, &adoptedDBInstance, inventory.Namespace, &adoptedDBInstance, adoptedDBInstance.Kind)
@@ -581,7 +597,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			} else if output != nil {
 				for _, instance := range output.DBInstances {
 					if instance.DBInstanceIdentifier != nil && instance.DBInstanceArn != nil {
-						awsDBInstanceIdentifiers[*instance.DBInstanceIdentifier] = *instance.DBInstanceArn
+						awsDBInstanceIdentifiers[*instance.DBInstanceArn] = *instance.DBInstanceIdentifier
 					}
 				}
 			}
@@ -601,9 +617,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				dbInstance.Status.ACKResourceMetadata == nil || dbInstance.Status.ACKResourceMetadata.ARN == nil {
 				continue
 			}
-			if arn, ok := awsDBInstanceIdentifiers[*dbInstance.Spec.DBInstanceIdentifier]; !ok {
-				continue
-			} else if arn != string(*dbInstance.Status.ACKResourceMetadata.ARN) {
+			if _, ok := awsDBInstanceIdentifiers[string(*dbInstance.Status.ACKResourceMetadata.ARN)]; !ok {
 				continue
 			}
 			instance := dbaasv1alpha1.Instance{
@@ -843,10 +857,11 @@ func (r *RDSInventoryReconciler) startRDSController(ctx context.Context) error {
 }
 
 func createAdoptedResource(dbInstance *rdstypesv2.DBInstance, inventory *rdsdbaasv1alpha1.RDSInventory) *ackv1alpha1.AdoptedResource {
+	arn := ackv1alpha1.AWSResourceName(*dbInstance.DBInstanceArn)
 	return &ackv1alpha1.AdoptedResource{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: inventory.Namespace,
-			Name:      fmt.Sprintf("rhoda-adopted-db-instance-%s", strings.ToLower(*dbInstance.DBInstanceIdentifier)),
+			Name:      fmt.Sprintf("rhoda-adopted-%s%s-%s", getDBEngineAbbreviation(dbInstance.Engine), strings.ToLower(*dbInstance.DBInstanceIdentifier), uuid.NewUUID()),
 			Annotations: map[string]string{
 				"managed-by":      "rds-dbaas-operator",
 				"owner":           inventory.Name,
@@ -869,6 +884,7 @@ func createAdoptedResource(dbInstance *rdstypesv2.DBInstance, inventory *rdsdbaa
 			},
 			AWS: &ackv1alpha1.AWSIdentifiers{
 				NameOrID: *dbInstance.DBInstanceIdentifier,
+				ARN:      &arn,
 			},
 		},
 	}

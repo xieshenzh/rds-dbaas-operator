@@ -238,8 +238,8 @@ var _ = Describe("RDSInstanceController", func() {
 							if dbInstance.Spec.DBInstanceIdentifier == nil {
 								return false
 							}
-							Expect(strings.HasPrefix(*dbInstance.Spec.DBInstanceIdentifier, "rhoda-database-")).Should(BeTrue())
-							id := strings.TrimPrefix(*dbInstance.Spec.DBInstanceIdentifier, "rhoda-database-")
+							Expect(strings.HasPrefix(*dbInstance.Spec.DBInstanceIdentifier, "rhoda-postgres-")).Should(BeTrue())
+							id := strings.TrimPrefix(*dbInstance.Spec.DBInstanceIdentifier, "rhoda-postgres-")
 							_, err := uuid.Parse(id)
 							Expect(err).ShouldNot(HaveOccurred())
 							if dbInstance.Spec.PubliclyAccessible == nil || *dbInstance.Spec.PubliclyAccessible != true {
@@ -403,8 +403,8 @@ var _ = Describe("RDSInstanceController", func() {
 								Expect(dbInstance.Spec.Engine).ShouldNot(BeNil())
 								Expect(*dbInstance.Spec.Engine).Should(Equal("postgres"))
 								Expect(dbInstance.Spec.DBInstanceIdentifier).ShouldNot(BeNil())
-								Expect(strings.HasPrefix(*dbInstance.Spec.DBInstanceIdentifier, "rhoda-database-")).Should(BeTrue())
-								id := strings.TrimPrefix(*dbInstance.Spec.DBInstanceIdentifier, "rhoda-database-")
+								Expect(strings.HasPrefix(*dbInstance.Spec.DBInstanceIdentifier, "rhoda-postgres-")).Should(BeTrue())
+								id := strings.TrimPrefix(*dbInstance.Spec.DBInstanceIdentifier, "rhoda-postgres-")
 								_, err := uuid.Parse(id)
 								Expect(err).ShouldNot(HaveOccurred())
 								Expect(dbInstance.Spec.DBInstanceClass).ShouldNot(BeNil())
@@ -782,8 +782,8 @@ var _ = Describe("RDSInstanceController", func() {
 									Expect(condition4.Reason).Should(Equal("DBInstance"))
 									Expect(condition4.Message).Should(Equal("Reason: test##reason&&"))
 
-									Expect(strings.HasPrefix(ins.Status.InstanceID, "rhoda-database-")).Should(BeTrue())
-									id := strings.TrimPrefix(ins.Status.InstanceID, "rhoda-database-")
+									Expect(strings.HasPrefix(ins.Status.InstanceID, "rhoda-postgres-")).Should(BeTrue())
+									id := strings.TrimPrefix(ins.Status.InstanceID, "rhoda-postgres-")
 									_, err := uuid.Parse(id)
 									Expect(err).ShouldNot(HaveOccurred())
 
@@ -791,6 +791,8 @@ var _ = Describe("RDSInstanceController", func() {
 										return false
 									}
 									info := map[string]string{
+										"engine":                                        "postgres",
+										"engineVersion":                                 "13.2",
 										"ackResourceMetadata.arn":                       "test-arn",
 										"ackResourceMetadata.ownerAccountID":            "test-id",
 										"ackResourceMetadata.region":                    "test-region",

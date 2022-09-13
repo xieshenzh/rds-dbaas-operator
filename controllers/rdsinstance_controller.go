@@ -418,10 +418,6 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 }
 
 func (r *RDSInstanceReconciler) setDBInstanceSpec(ctx context.Context, dbInstance *rdsv1alpha1.DBInstance, rdsInstance *rdsdbaasv1alpha1.RDSInstance) error {
-	if dbInstance.Spec.DBInstanceIdentifier == nil {
-		dbInstance.Spec.DBInstanceIdentifier = pointer.String(fmt.Sprintf("rhoda-database-%s", string(uuid.NewUUID())))
-	}
-
 	if len(rdsInstance.Spec.CloudRegion) > 0 {
 		dbInstance.Spec.AvailabilityZone = pointer.String(rdsInstance.Spec.CloudRegion)
 	} else {
@@ -436,6 +432,10 @@ func (r *RDSInstanceReconciler) setDBInstanceSpec(ctx context.Context, dbInstanc
 
 	if engineVersion, ok := rdsInstance.Spec.OtherInstanceParams[engineVersion]; ok {
 		dbInstance.Spec.EngineVersion = pointer.String(engineVersion)
+	}
+
+	if dbInstance.Spec.DBInstanceIdentifier == nil {
+		dbInstance.Spec.DBInstanceIdentifier = pointer.String(fmt.Sprintf("rhoda-%s%s", getDBEngineAbbreviation(dbInstance.Spec.Engine), string(uuid.NewUUID())))
 	}
 
 	if dbInstanceClass, ok := rdsInstance.Spec.OtherInstanceParams[dbInstanceClass]; ok {
@@ -626,6 +626,12 @@ func setDBInstanceStatus(dbInstance *rdsv1alpha1.DBInstance, rdsInstance *rdsdba
 
 func parseDBInstanceStatus(dbInstance *rdsv1alpha1.DBInstance) map[string]string {
 	instanceStatus := map[string]string{}
+	if dbInstance.Spec.Engine != nil {
+		instanceStatus["engine"] = *dbInstance.Spec.Engine
+	}
+	if dbInstance.Spec.EngineVersion != nil {
+		instanceStatus["engineVersion"] = *dbInstance.Spec.EngineVersion
+	}
 	if dbInstance.Status.ACKResourceMetadata != nil {
 		if dbInstance.Status.ACKResourceMetadata.ARN != nil {
 			instanceStatus["ackResourceMetadata.arn"] = string(*dbInstance.Status.ACKResourceMetadata.ARN)
