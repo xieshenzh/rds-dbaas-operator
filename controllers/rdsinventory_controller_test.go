@@ -720,7 +720,7 @@ var _ = Describe("RDSInventoryController", func() {
 						Namespace: testNamespace,
 					},
 					Spec: rdsv1alpha1.DBInstanceSpec{
-						Engine:               pointer.String("postgres"),
+						Engine:               pointer.String("mysql"),
 						DBInstanceIdentifier: pointer.String("mock-db-instance-7"),
 						DBInstanceClass:      pointer.String("db.t3.micro"),
 					},
@@ -747,6 +747,62 @@ var _ = Describe("RDSInventoryController", func() {
 				}
 				BeforeEach(assertResourceCreation(adoptedMockInstance7))
 				AfterEach(assertResourceDeletionIfExist(adoptedMockInstance7))
+
+				// Not adopted, already adopted
+				adoptedMockInstance8ARN := ackv1alpha1.AWSResourceName("mock-db-instance-8")
+				adoptedMockInstance8 := &ackv1alpha1.AdoptedResource{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "mock-db-instance-8",
+						Namespace: testNamespace,
+					},
+					Spec: ackv1alpha1.AdoptedResourceSpec{
+						AWS: &ackv1alpha1.AWSIdentifiers{
+							NameOrID: "mock-db-instance-8",
+							ARN:      &adoptedMockInstance8ARN,
+						},
+						Kubernetes: &ackv1alpha1.ResourceWithMetadata{
+							GroupKind: metav1.GroupKind{
+								Group: rdsv1alpha1.GroupVersion.Group,
+								Kind:  "DBInstance",
+							},
+						},
+					},
+				}
+				BeforeEach(assertResourceCreation(adoptedMockInstance8))
+				AfterEach(assertResourceDeletionIfExist(adoptedMockInstance8))
+
+				// Not adopted, DB instance exists
+				mockDBInstance9 := &rdsv1alpha1.DBInstance{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "mock-db-instance-9",
+						Namespace: testNamespace,
+					},
+					Spec: rdsv1alpha1.DBInstanceSpec{
+						Engine:               pointer.String("mysql"),
+						DBInstanceIdentifier: pointer.String("mock-db-instance-9"),
+						DBInstanceClass:      pointer.String("db.t3.micro"),
+					},
+				}
+				BeforeEach(assertResourceCreation(mockDBInstance9))
+				AfterEach(assertResourceDeletionIfExist(mockDBInstance9))
+				BeforeEach(func() {
+					Eventually(func() bool {
+						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(mockDBInstance9), mockDBInstance9); err != nil {
+							return false
+						}
+						mockDBInstance9.Status.DBInstanceStatus = pointer.String("available")
+						arn := ackv1alpha1.AWSResourceName("mock-db-instance-9")
+						ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+						region := ackv1alpha1.AWSRegion("us-east-1")
+						mockDBInstance9.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+							ARN:            &arn,
+							OwnerAccountID: &ownerAccountID,
+							Region:         &region,
+						}
+						err := k8sClient.Status().Update(ctx, mockDBInstance9)
+						return err == nil
+					}, timeout).Should(BeTrue())
+				})
 
 				// ARN match AWS
 				dbInstance15_0 := &rdsv1alpha1.DBInstance{
@@ -835,7 +891,7 @@ var _ = Describe("RDSInventoryController", func() {
 							if err := k8sClient.List(ctx, adoptedDBInstances, client.InNamespace(testNamespace)); err != nil {
 								return false
 							}
-							if len(adoptedDBInstances.Items) < 5 {
+							if len(adoptedDBInstances.Items) < 6 {
 								return false
 							}
 							dbInstancesMap := map[string]ackv1alpha1.AdoptedResource{}
@@ -953,6 +1009,24 @@ var _ = Describe("RDSInventoryController", func() {
 								Expect(instance.Spec.AWS.NameOrID).Should(Equal("mock-db-instance-7"))
 								Expect(instance.Spec.AWS.ARN).ShouldNot(BeNil())
 								Expect(string(*instance.Spec.AWS.ARN)).Should(Equal("mock-db-instance-7"))
+							}
+							if instance, ok := dbInstancesMap["mock-db-instance-8"]; !ok {
+								return false
+							} else {
+								if instance.Name != "mock-db-instance-8" {
+									return false
+								}
+								for i := range adoptedDBInstances.Items {
+									ins := adoptedDBInstances.Items[i]
+									if ins.Spec.AWS.NameOrID == "mock-db-instance-8" {
+										if ins.Name != "mock-db-instance-8" {
+											return false
+										}
+									}
+								}
+							}
+							if _, ok := dbInstancesMap["mock-db-instance-9"]; ok {
+								return false
 							}
 							if _, ok := dbInstancesMap["mock-db-instance-5"]; ok {
 								return false

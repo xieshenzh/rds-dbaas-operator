@@ -460,12 +460,13 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				if _, ok := dbInstanceMap[*dbInstance.DBInstanceArn]; ok {
 					continue
 				}
-				adoptingResource = true
-				logger.Info("Adopting DB Instance", "DB Instance Identifier", *dbInstance.DBInstanceIdentifier, "ARN", *dbInstance.DBInstanceArn)
 
-				if _, ok := adoptedDBInstanceMap[*dbInstance.DBInstanceIdentifier]; ok {
+				if _, ok := adoptedDBInstanceMap[*dbInstance.DBInstanceArn]; ok {
 					continue
 				}
+
+				adoptingResource = true
+				logger.Info("Adopting DB Instance", "DB Instance Identifier", *dbInstance.DBInstanceIdentifier, "ARN", *dbInstance.DBInstanceArn)
 
 				adoptedDBInstance := createAdoptedResource(&dbInstance, &inventory)
 				if e := ophandler.SetOwnerAnnotations(&inventory, adoptedDBInstance); e != nil {

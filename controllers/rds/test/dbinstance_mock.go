@@ -77,6 +77,20 @@ var inventoryTestDBInstances = []*rds.DescribeDBInstancesOutput{
 				Engine:               pointer.String("mysql"),
 				DBInstanceArn:        pointer.String("mock-db-instance-7"),
 			},
+			// Already adopted, not adopted
+			{
+				DBInstanceIdentifier: pointer.String("mock-db-instance-8"),
+				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("mysql"),
+				DBInstanceArn:        pointer.String("mock-db-instance-8"),
+			},
+			// DB instance exists, not adopted
+			{
+				DBInstanceIdentifier: pointer.String("mock-db-instance-9"),
+				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("mysql"),
+				DBInstanceArn:        pointer.String("mock-db-instance-9"),
+			},
 		},
 	},
 	{
