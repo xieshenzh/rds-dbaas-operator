@@ -495,7 +495,7 @@ var _ = Describe("RDSConnectionController", func() {
 												})
 
 												Context("when the Instance connection info is complete", func() {
-													It("should create Secret and ConfigMap for binding", func() {
+													It("should create Secret for binding", func() {
 														By("checking the status of the Connection")
 														conn := &rdsdbaasv1alpha1.RDSConnection{
 															ObjectMeta: metav1.ObjectMeta{
@@ -648,7 +648,7 @@ var _ = Describe("RDSConnectionController", func() {
 				BeforeEach(assertResourceCreation(connection))
 				AfterEach(assertResourceDeletion(connection))
 
-				It("should add jdbc-url to the ConfigMap for service binding", func() {
+				It("should not add jdbc-url to the Secret for service binding", func() {
 					By("checking the status of the Connection")
 					conn := &rdsdbaasv1alpha1.RDSConnection{
 						ObjectMeta: metav1.ObjectMeta{
@@ -669,7 +669,7 @@ var _ = Describe("RDSConnectionController", func() {
 						return true
 					}, timeout).Should(BeTrue())
 
-					By("checking the ConfigMap of the Connection")
+					By("checking the Secret of the Connection")
 					secret := &v1.Secret{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      conn.Status.Binding.Name,
@@ -684,9 +684,8 @@ var _ = Describe("RDSConnectionController", func() {
 					password, passwordOk := secret.Data["password"]
 					Expect(passwordOk).Should(BeTrue())
 					Expect(string(password)).Should(Equal("testpassword"))
-					ju, juOk := secret.Data["jdbc-url"]
-					Expect(juOk).Should(BeTrue())
-					Expect(string(ju)).Should(Equal("jdbc:oracle:thin:@address-oracle-connection-controller:9000/ORCL"))
+					_, juOk := secret.Data["jdbc-url"]
+					Expect(juOk).Should(BeFalse())
 					t, typeOk := secret.Data["type"]
 					Expect(typeOk).Should(BeTrue())
 					Expect(string(t)).Should(Equal("oracle"))
@@ -738,7 +737,7 @@ var _ = Describe("RDSConnectionController", func() {
 				BeforeEach(assertResourceCreation(connection))
 				AfterEach(assertResourceDeletion(connection))
 
-				It("should add jdbc-url to the ConfigMap for service binding", func() {
+				It("should not add jdbc-url to the Secret for service binding", func() {
 					By("checking the status of the Connection")
 					conn := &rdsdbaasv1alpha1.RDSConnection{
 						ObjectMeta: metav1.ObjectMeta{
@@ -759,7 +758,7 @@ var _ = Describe("RDSConnectionController", func() {
 						return true
 					}, timeout).Should(BeTrue())
 
-					By("checking the ConfigMap of the Connection")
+					By("checking the Secret of the Connection")
 					secret := &v1.Secret{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      conn.Status.Binding.Name,
@@ -774,9 +773,8 @@ var _ = Describe("RDSConnectionController", func() {
 					password, passwordOk := secret.Data["password"]
 					Expect(passwordOk).Should(BeTrue())
 					Expect(string(password)).Should(Equal("testpassword"))
-					ju, juOk := secret.Data["jdbc-url"]
-					Expect(juOk).Should(BeTrue())
-					Expect(string(ju)).Should(Equal("jdbc:sqlserver://address-sqlserver-connection-controller:9000;databaseName=master"))
+					_, juOk := secret.Data["jdbc-url"]
+					Expect(juOk).Should(BeFalse())
 					t, typeOk := secret.Data["type"]
 					Expect(typeOk).Should(BeTrue())
 					Expect(string(t)).Should(Equal("sqlserver"))

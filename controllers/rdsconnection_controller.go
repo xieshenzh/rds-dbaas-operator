@@ -80,7 +80,7 @@ type RDSConnectionReconciler struct {
 //+kubebuilder:rbac:groups=dbaas.redhat.com,resources=rdsconnections/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=dbaas.redhat.com,resources=rdsconnections/finalizers,verbs=update
 //+kubebuilder:rbac:groups=rds.services.k8s.aws,resources=dbinstances,verbs=get;list;watch
-//+kubebuilder:rbac:groups="",resources=secrets;configmaps,verbs=get;list;watch;create;delete;update
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;delete;update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -319,28 +319,6 @@ func setSecret(secret *v1.Secret, dbSecret *v1.Secret, dbInstance *rdsv1alpha1.D
 	} else if dbInstance.Spec.Engine != nil {
 		if dbName := getDefaultDBName(*dbInstance.Spec.Engine); dbName != nil {
 			data["database"] = []byte(*dbName)
-		}
-	}
-
-	if dbInstance.Spec.Engine != nil {
-		host := data["host"]
-		port := data["port"]
-		db, dbOk := data["database"]
-
-		switch *dbInstance.Spec.Engine {
-		case oracleSe2, oracleSe2Cdb, oracleEe, oracleEeCdb, customOracleEe:
-			if dbOk {
-				data["jdbc-url"] = []byte(fmt.Sprintf("jdbc:oracle:thin:@%s:%s/%s", host, port, db))
-			} else {
-				data["jdbc-url"] = []byte(fmt.Sprintf("jdbc:oracle:thin:@%s:%s", host, port))
-			}
-		case sqlserverEe, sqlserverSe, sqlserverEx, sqlserverWeb, customSqlserverEe, customSqlserverSe, customSqlserverWeb:
-			if dbOk {
-				data["jdbc-url"] = []byte(fmt.Sprintf("jdbc:sqlserver://%s:%s;databaseName=%s", host, port, db))
-			} else {
-				data["jdbc-url"] = []byte(fmt.Sprintf("jdbc:sqlserver://%s:%s", host, port))
-			}
-		default:
 		}
 	}
 
