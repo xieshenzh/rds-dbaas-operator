@@ -1804,5 +1804,348 @@ var _ = Describe("RDSInventoryController", func() {
 				})
 			})
 		})
+
+		Context("when Inventory is created", func() {
+			inventory := &rdsdbaasv1alpha1.RDSInventory{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      inventoryName + "-adopting",
+					Namespace: testNamespace,
+				},
+				Spec: dbaasv1alpha1.DBaaSInventorySpec{
+					CredentialsRef: &dbaasv1alpha1.LocalObjectReference{
+						Name: credentialName,
+					},
+				},
+			}
+			BeforeEach(assertResourceCreation(inventory))
+			AfterEach(assertResourceDeletion(inventory))
+
+			It("should start the RDS controller, adopt the DB instances and the inventory should not be ready", func() {
+				By("checking if the Secret for RDS controller is created")
+				rdsSecret := &v1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ack-rds-user-secrets",
+						Namespace: testNamespace,
+					},
+				}
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rdsSecret), rdsSecret); err != nil {
+						return false
+					}
+					ak, akOk := rdsSecret.Data["AWS_ACCESS_KEY_ID"]
+					Expect(akOk).Should(BeTrue())
+					Expect(ak).Should(Equal([]byte(accessKey)))
+					sk, skOk := rdsSecret.Data["AWS_SECRET_ACCESS_KEY"]
+					Expect(skOk).Should(BeTrue())
+					Expect(sk).Should(Equal([]byte(secretKey)))
+					return true
+				}, timeout).Should(BeTrue())
+
+				By("checking if the ConfigMap for RDS controller is created")
+				rdsConfigMap := &v1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ack-rds-user-config",
+						Namespace: testNamespace,
+					},
+				}
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rdsConfigMap), rdsConfigMap); err != nil {
+						return false
+					}
+					r, ok := rdsConfigMap.Data["AWS_REGION"]
+					Expect(ok).Should(BeTrue())
+					Expect(r).Should(Equal(region))
+					return true
+				}, timeout).Should(BeTrue())
+
+				By("checking if the RDS controller is started")
+				deployment := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ack-rds-controller",
+						Namespace: testNamespace,
+					},
+				}
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
+						return false
+					}
+					return *deployment.Spec.Replicas == 1 && deployment.Status.Replicas == 1 && deployment.Status.ReadyReplicas == 1
+				}, timeout).Should(BeTrue())
+
+				By("checking if DB instances are adopted")
+				Eventually(func() bool {
+					adoptedDBInstances := &ackv1alpha1.AdoptedResourceList{}
+					if err := k8sClient.List(ctx, adoptedDBInstances, client.InNamespace(testNamespace)); err != nil {
+						return false
+					}
+					if len(adoptedDBInstances.Items) < 10 {
+						return false
+					}
+					dbInstancesMap := map[string]ackv1alpha1.AdoptedResource{}
+					for i := range adoptedDBInstances.Items {
+						instance := adoptedDBInstances.Items[i]
+						dbInstancesMap[instance.Spec.AWS.NameOrID] = instance
+					}
+
+					if _, ok := dbInstancesMap["mock-db-instance-1"]; !ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-instance-2"]; !ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-instance-3"]; !ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-instance-4"]; !ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-instance-7"]; !ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-instance-8"]; !ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-instance-9"]; !ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-adopted-db-instance-3"]; !ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-adopted-db-instance-5"]; !ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-adopted-db-instance-15"]; !ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-instance-5"]; ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-adopted-db-instance-4"]; ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-cluster-1"]; ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-cluster-2"]; ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-aurora-1"]; ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-aurora-2"]; ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-aurora-3"]; ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-custom-1"]; ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-custom-2"]; ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-custom-3"]; ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-custom-4"]; ok {
+						return false
+					}
+					return true
+				}, timeout).Should(BeTrue())
+
+				By("checking Inventory status")
+				inv := &rdsdbaasv1alpha1.RDSInventory{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      inventoryName + "-adopting",
+						Namespace: testNamespace,
+					},
+				}
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(inv), inv); err != nil {
+						return false
+					}
+					condition := apimeta.FindStatusCondition(inv.Status.Conditions, "SpecSynced")
+					if condition != nil {
+						return false
+					}
+					if len(inv.Status.Instances) > 0 {
+						return false
+					}
+					return true
+				}, timeout).Should(BeTrue())
+			})
+
+			It("should start the RDS controller, adopt the DB instances and the inventory should be ready", func() {
+				By("checking if the Secret for RDS controller is created")
+				rdsSecret := &v1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ack-rds-user-secrets",
+						Namespace: testNamespace,
+					},
+				}
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rdsSecret), rdsSecret); err != nil {
+						return false
+					}
+					ak, akOk := rdsSecret.Data["AWS_ACCESS_KEY_ID"]
+					Expect(akOk).Should(BeTrue())
+					Expect(ak).Should(Equal([]byte(accessKey)))
+					sk, skOk := rdsSecret.Data["AWS_SECRET_ACCESS_KEY"]
+					Expect(skOk).Should(BeTrue())
+					Expect(sk).Should(Equal([]byte(secretKey)))
+					return true
+				}, timeout).Should(BeTrue())
+
+				By("checking if the ConfigMap for RDS controller is created")
+				rdsConfigMap := &v1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ack-rds-user-config",
+						Namespace: testNamespace,
+					},
+				}
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rdsConfigMap), rdsConfigMap); err != nil {
+						return false
+					}
+					r, ok := rdsConfigMap.Data["AWS_REGION"]
+					Expect(ok).Should(BeTrue())
+					Expect(r).Should(Equal(region))
+					return true
+				}, timeout).Should(BeTrue())
+
+				By("checking if the RDS controller is started")
+				deployment := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ack-rds-controller",
+						Namespace: testNamespace,
+					},
+				}
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
+						return false
+					}
+					return *deployment.Spec.Replicas == 1 && deployment.Status.Replicas == 1 && deployment.Status.ReadyReplicas == 1
+				}, timeout).Should(BeTrue())
+
+				By("checking if DB instances are adopted")
+				Eventually(func() bool {
+					adoptedDBInstances := &ackv1alpha1.AdoptedResourceList{}
+					if err := k8sClient.List(ctx, adoptedDBInstances, client.InNamespace(testNamespace)); err != nil {
+						return false
+					}
+					if len(adoptedDBInstances.Items) < 10 {
+						return false
+					}
+					dbInstancesMap := map[string]ackv1alpha1.AdoptedResource{}
+					for i := range adoptedDBInstances.Items {
+						instance := adoptedDBInstances.Items[i]
+						dbInstancesMap[instance.Spec.AWS.NameOrID] = instance
+					}
+
+					if _, ok := dbInstancesMap["mock-db-instance-1"]; !ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-instance-2"]; !ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-instance-3"]; !ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-instance-4"]; !ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-instance-7"]; !ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-instance-8"]; !ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-instance-9"]; !ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-adopted-db-instance-3"]; !ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-adopted-db-instance-5"]; !ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-adopted-db-instance-15"]; !ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-instance-5"]; ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-adopted-db-instance-4"]; ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-cluster-1"]; ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-cluster-2"]; ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-aurora-1"]; ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-aurora-2"]; ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-aurora-3"]; ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-custom-1"]; ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-custom-2"]; ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-custom-3"]; ok {
+						return false
+					}
+					if _, ok := dbInstancesMap["mock-db-custom-4"]; ok {
+						return false
+					}
+
+					By("making DB instances adopted")
+					for i := range adoptedDBInstances.Items {
+						instance := adoptedDBInstances.Items[i]
+						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(&instance), &instance); err != nil {
+							return false
+						}
+						instance.Status.Conditions = []*ackv1alpha1.Condition{
+							{
+								Type:   ackv1alpha1.ConditionTypeAdopted,
+								Status: v1.ConditionTrue,
+							},
+						}
+						if err := k8sClient.Status().Update(ctx, &instance); err != nil {
+							return false
+						}
+					}
+					return true
+				}, timeout).Should(BeTrue())
+
+				By("checking Inventory status")
+				inv := &rdsdbaasv1alpha1.RDSInventory{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      inventoryName + "-adopting",
+						Namespace: testNamespace,
+					},
+				}
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(inv), inv); err != nil {
+						return false
+					}
+					condition := apimeta.FindStatusCondition(inv.Status.Conditions, "SpecSynced")
+					if condition == nil || condition.Status != metav1.ConditionTrue || condition.Reason != "SyncOK" {
+						return false
+					}
+					if len(inv.Status.Instances) > 0 {
+						return false
+					}
+					return true
+				}, timeout).Should(BeTrue())
+			})
+		})
 	})
 })

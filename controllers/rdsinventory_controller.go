@@ -628,6 +628,42 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			}
 			instances = append(instances, instance)
 		}
+
+		// DB instances found in AWS but not found with RDS controller, check if adopting DB instance is in process
+		if len(awsDBInstanceIdentifiers) > 0 && len(instances) == 0 {
+			adoptedResourceList := &ackv1alpha1.AdoptedResourceList{}
+			if e := r.List(ctx, adoptedResourceList, client.InNamespace(inventory.Namespace)); e != nil {
+				logger.Error(e, "Failed to read adopted DB Instances of the Inventory in the cluster")
+				returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetInstancesError)
+				return true
+			}
+			for i := range adoptedResourceList.Items {
+				adoptedDBInstance := adoptedResourceList.Items[i]
+				if adoptedDBInstance.Spec.AWS == nil || adoptedDBInstance.Spec.AWS.ARN == nil {
+					continue
+				}
+				if _, ok := awsDBInstanceIdentifiers[string(*adoptedDBInstance.Spec.AWS.ARN)]; ok {
+					wait := true
+					// Ignore the DB instances that are already adopted
+					if adoptedDBInstance.Status.Conditions != nil {
+						for j := range adoptedDBInstance.Status.Conditions {
+							condition := adoptedDBInstance.Status.Conditions[j]
+							if condition != nil && condition.Type == ackv1alpha1.ConditionTypeAdopted &&
+								condition.Status == v1.ConditionTrue {
+								wait = false
+								break
+							}
+						}
+					}
+					if wait {
+						logger.Info("Wait for the RDS controller to adopt DB instances")
+						returnRequeueSyncReset()
+						return true
+					}
+				}
+			}
+		}
+
 		inventory.Status.Instances = instances
 
 		if e := r.Status().Update(ctx, &inventory); e != nil {
