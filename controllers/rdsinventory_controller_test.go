@@ -1058,6 +1058,23 @@ var _ = Describe("RDSInventoryController", func() {
 							if _, ok := dbInstancesMap["mock-db-custom-4"]; ok {
 								return false
 							}
+
+							By("making DB instances adopted")
+							for i := range adoptedDBInstances.Items {
+								instance := adoptedDBInstances.Items[i]
+								if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(&instance), &instance); err != nil {
+									return false
+								}
+								instance.Status.Conditions = []*ackv1alpha1.Condition{
+									{
+										Type:   ackv1alpha1.ConditionTypeAdopted,
+										Status: v1.ConditionTrue,
+									},
+								}
+								if err := k8sClient.Status().Update(ctx, &instance); err != nil {
+									return false
+								}
+							}
 							return true
 						}, timeout).Should(BeTrue())
 
