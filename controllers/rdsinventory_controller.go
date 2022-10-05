@@ -425,10 +425,10 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetInstancesError)
 				return true, false
 			}
-			adoptedDBInstanceMap := make(map[string]string, len(adoptedResourceList.Items))
+			adoptedDBInstanceMap := make(map[string]ackv1alpha1.AdoptedResource, len(adoptedResourceList.Items))
 			for _, adoptedDBInstance := range adoptedResourceList.Items {
 				if adoptedDBInstance.Spec.AWS != nil && adoptedDBInstance.Spec.AWS.ARN != nil {
-					adoptedDBInstanceMap[string(*adoptedDBInstance.Spec.AWS.ARN)] = adoptedDBInstance.Spec.AWS.NameOrID
+					adoptedDBInstanceMap[string(*adoptedDBInstance.Spec.AWS.ARN)] = adoptedDBInstance
 				}
 			}
 
@@ -461,7 +461,24 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 					continue
 				}
 
-				if _, ok := adoptedDBInstanceMap[*dbInstance.DBInstanceArn]; ok {
+				if adoptedDBInstance, ok := adoptedDBInstanceMap[*dbInstance.DBInstanceArn]; ok {
+					// Wait for the DB instances that are being adopted
+					if adoptedDBInstance.Status.Conditions == nil {
+						adoptingResource = true
+					} else {
+						adopted := false
+						for j := range adoptedDBInstance.Status.Conditions {
+							condition := adoptedDBInstance.Status.Conditions[j]
+							if condition != nil && condition.Type == ackv1alpha1.ConditionTypeAdopted &&
+								condition.Status == v1.ConditionTrue {
+								adopted = true
+								break
+							}
+						}
+						if !adopted {
+							adoptingResource = true
+						}
+					}
 					continue
 				}
 
