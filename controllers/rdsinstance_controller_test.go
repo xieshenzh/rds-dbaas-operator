@@ -588,6 +588,7 @@ var _ = Describe("RDSInstanceController", func() {
 									dbInstance.Status.ActivityStreamKinesisStreamName = pointer.String("test-name")
 									dbInstance.Status.ActivityStreamKMSKeyID = pointer.String("test-id")
 									dbInstance.Status.ActivityStreamMode = pointer.String("test-mode")
+									dbInstance.Status.ActivityStreamPolicyStatus = pointer.String("test-status")
 									dbInstance.Status.ActivityStreamStatus = pointer.String("test-status")
 									dbInstance.Status.AssociatedRoles = []*rdsv1alpha1.DBInstanceRole{
 										{
@@ -713,12 +714,6 @@ var _ = Describe("RDSInstanceController", func() {
 											StatusType: pointer.String("test-type"),
 										},
 									}
-									dbInstance.Status.TagList = []*rdsv1alpha1.Tag{
-										{
-											Key:   pointer.String("test-key"),
-											Value: pointer.String("test-value"),
-										},
-									}
 									dbInstance.Status.VPCSecurityGroups = []*rdsv1alpha1.VPCSecurityGroupMembership{
 										{
 											Status:             pointer.String("test-status"),
@@ -800,6 +795,7 @@ var _ = Describe("RDSInstanceController", func() {
 										"activityStreamKinesisStreamName":               "test-name",
 										"activityStreamKMSKeyID":                        "test-id",
 										"activityStreamMode":                            "test-mode",
+										"activityStreamPolicyStatus":                    "test-status",
 										"activityStreamStatus":                          "test-status",
 										"associatedRoles[0].featureName":                "test-name",
 										"associatedRoles[0].roleARN":                    "test-arn",
@@ -869,8 +865,6 @@ var _ = Describe("RDSInstanceController", func() {
 										"statusInfos[0].normal":                                                   "false",
 										"statusInfos[0].status":                                                   "test-status",
 										"statusInfos[0].statusType":                                               "test-type",
-										"tagList[0].key":                                                          "test-key",
-										"tagList[0].value":                                                        "test-value",
 										"vpcSecurityGroups[0].status":                                             "test-status",
 										"vpcSecurityGroups[0].vpcSecurityGroupID":                                 "test-id",
 									}
