@@ -7,7 +7,7 @@ CONTAINER_ENGINE?=docker
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 0.2.0
 
-RDS_VERSION ?= 0.0.27
+RDS_VERSION ?= 0.1.1
 
 # QUAY_ORG indicates the organization that docker images will be build for & pushed to
 # CHANGE THIS TO YOUR OWN QUAY USERNAME FOR DEV/TESTING/PUSHING

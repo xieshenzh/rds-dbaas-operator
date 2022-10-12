@@ -97,6 +97,7 @@ const (
 	inventoryStatusMessageUpdateInstanceError = "Failed to update DB Instance"
 	inventoryStatusMessageGetError            = "Failed to get %s"
 	inventoryStatusMessageDeleteError         = "Failed to delete %s"
+	inventoryStatusMessageResetError          = "Failed to reset %s"
 	inventoryStatusMessageCreateOrUpdateError = "Failed to create or update %s"
 	inventoryStatusMessageCredentialsError    = "The AWS service account is not valid for accessing RDS DB instances"
 	inventoryStatusMessageInstallError        = "Failed to install %s for RDS controller"
@@ -254,40 +255,17 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 					return true
 				}
 
-				if e := r.stopRDSController(ctx, r.Client, false); e != nil {
-					returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageUninstallError)
+				if e := r.createOrUpdateSecret(ctx, r.Client, nil); e != nil {
+					returnError(e, inventoryStatusReasonBackendError, fmt.Sprintf(inventoryStatusMessageResetError, "Secret"))
+					return true
+				}
+				if e := r.createOrUpdateConfigMap(ctx, r.Client, nil); e != nil {
+					returnError(e, inventoryStatusReasonBackendError, fmt.Sprintf(inventoryStatusMessageResetError, "ConfigMap"))
 					return true
 				}
 
-				deletingRDSConfig := false
-				secret := &v1.Secret{}
-				if e := r.Get(ctx, client.ObjectKey{Namespace: r.ACKInstallNamespace, Name: secretName}, secret); e != nil {
-					if !errors.IsNotFound(e) {
-						returnError(e, inventoryStatusReasonBackendError, fmt.Sprintf(inventoryStatusMessageGetError, "Secret"))
-						return true
-					}
-				} else {
-					if e := r.Delete(ctx, secret); e != nil {
-						returnError(e, inventoryStatusReasonBackendError, fmt.Sprintf(inventoryStatusMessageDeleteError, "Secret"))
-						return true
-					}
-					deletingRDSConfig = true
-				}
-				configmap := &v1.ConfigMap{}
-				if e := r.Get(ctx, client.ObjectKey{Namespace: r.ACKInstallNamespace, Name: configmapName}, configmap); e != nil {
-					if !errors.IsNotFound(e) {
-						returnError(e, inventoryStatusReasonBackendError, fmt.Sprintf(inventoryStatusMessageGetError, "ConfigMap"))
-						return true
-					}
-				} else {
-					if e := r.Delete(ctx, configmap); e != nil {
-						returnError(e, inventoryStatusReasonBackendError, fmt.Sprintf(inventoryStatusMessageDeleteError, "ConfigMap"))
-						return true
-					}
-					deletingRDSConfig = true
-				}
-				if deletingRDSConfig {
-					returnRequeueSyncReset()
+				if e := r.stopRDSController(ctx, r.Client, false); e != nil {
+					returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageUninstallError)
 					return true
 				}
 
@@ -360,12 +338,12 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	installRDSController := func() bool {
-		if e := r.createOrUpdateSecret(ctx, &inventory, &credentialsRef); e != nil {
+		if e := r.createOrUpdateSecret(ctx, r.Client, &credentialsRef); e != nil {
 			logger.Error(e, "Failed to create or update secret for Inventory")
 			returnError(e, inventoryStatusReasonBackendError, fmt.Sprintf(inventoryStatusMessageCreateOrUpdateError, "Secret"))
 			return true
 		}
-		if e := r.createOrUpdateConfigMap(ctx, &inventory, &credentialsRef); e != nil {
+		if e := r.createOrUpdateConfigMap(ctx, r.Client, &credentialsRef); e != nil {
 			logger.Error(e, "Failed to create or update configmap for Inventory")
 			returnError(e, inventoryStatusReasonBackendError, fmt.Sprintf(inventoryStatusMessageCreateOrUpdateError, "ConfigMap"))
 			return true
@@ -701,23 +679,36 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	return
 }
 
-func (r *RDSInventoryReconciler) createOrUpdateSecret(ctx context.Context, inventory *rdsdbaasv1alpha1.RDSInventory,
-	credentialsRef *v1.Secret) error {
+func (r *RDSInventoryReconciler) createOrUpdateSecret(ctx context.Context, cli client.Client, credentialsRef *v1.Secret) error {
+	deployment := &appsv1.Deployment{}
+	if e := cli.Get(ctx, client.ObjectKey{Namespace: r.ACKInstallNamespace, Name: ackDeploymentName}, deployment); e != nil {
+		return e
+	}
+
 	secret := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
 			Namespace: r.ACKInstallNamespace,
 		},
 	}
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, secret, func() error {
-		secret.ObjectMeta.Labels = buildInventoryLabels()
-		secret.ObjectMeta.Annotations = buildInventoryAnnotations(inventory, &secret.ObjectMeta)
-		if e := ophandler.SetOwnerAnnotations(inventory, secret); e != nil {
-			return e
+	_, err := controllerutil.CreateOrUpdate(ctx, cli, secret, func() error {
+		secret.ObjectMeta.Labels = buildDBaaSLabels()
+		secret.ObjectMeta.Annotations = r.buildDBaaSAnnotations(&secret.ObjectMeta)
+		if len(deployment.GetObjectKind().GroupVersionKind().GroupKind().Kind) > 0 {
+			if e := ophandler.SetOwnerAnnotations(deployment, secret); e != nil {
+				return e
+			}
 		}
-		secret.Data = map[string][]byte{
-			awsAccessKeyID:     credentialsRef.Data[awsAccessKeyID],
-			awsSecretAccessKey: credentialsRef.Data[awsSecretAccessKey],
+		if credentialsRef != nil {
+			secret.Data = map[string][]byte{
+				awsAccessKeyID:     credentialsRef.Data[awsAccessKeyID],
+				awsSecretAccessKey: credentialsRef.Data[awsSecretAccessKey],
+			}
+		} else {
+			secret.Data = map[string][]byte{
+				awsAccessKeyID:     []byte("dummy"),
+				awsSecretAccessKey: []byte("dummy"),
+			}
 		}
 		return nil
 	})
@@ -727,33 +718,43 @@ func (r *RDSInventoryReconciler) createOrUpdateSecret(ctx context.Context, inven
 	return nil
 }
 
-func (r *RDSInventoryReconciler) createOrUpdateConfigMap(ctx context.Context, inventory *rdsdbaasv1alpha1.RDSInventory,
-	credentialsRef *v1.Secret) error {
+func (r *RDSInventoryReconciler) createOrUpdateConfigMap(ctx context.Context, cli client.Client, credentialsRef *v1.Secret) error {
+	deployment := &appsv1.Deployment{}
+	if e := cli.Get(ctx, client.ObjectKey{Namespace: r.ACKInstallNamespace, Name: ackDeploymentName}, deployment); e != nil {
+		return e
+	}
+
 	cm := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      configmapName,
 			Namespace: r.ACKInstallNamespace,
 		},
 	}
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, cm, func() error {
-		cm.ObjectMeta.Labels = buildInventoryLabels()
-		cm.ObjectMeta.Annotations = buildInventoryAnnotations(inventory, &cm.ObjectMeta)
-		if e := ophandler.SetOwnerAnnotations(inventory, cm); e != nil {
-			return e
+	_, err := controllerutil.CreateOrUpdate(ctx, cli, cm, func() error {
+		cm.ObjectMeta.Labels = buildDBaaSLabels()
+		cm.ObjectMeta.Annotations = r.buildDBaaSAnnotations(&cm.ObjectMeta)
+		if len(deployment.GetObjectKind().GroupVersionKind().GroupKind().Kind) > 0 {
+			if e := ophandler.SetOwnerAnnotations(deployment, cm); e != nil {
+				return e
+			}
 		}
 		cm.Data = map[string]string{
-			awsRegion:                   string(credentialsRef.Data[awsRegion]),
 			awsEndpointUrl:              "",
 			ackEnableDevelopmentLogging: "false",
 			ackWatchNamespace:           "",
 			ackLogLevel:                 "info",
 			ackResourceTags:             "rhoda",
 		}
-		if l, ok := credentialsRef.Data[ackLogLevel]; ok {
-			cm.Data[ackLogLevel] = string(l)
-		}
-		if t, ok := credentialsRef.Data[ackResourceTags]; ok {
-			cm.Data[ackResourceTags] = string(t)
+		if credentialsRef != nil {
+			cm.Data[awsRegion] = string(credentialsRef.Data[awsRegion])
+			if l, ok := credentialsRef.Data[ackLogLevel]; ok {
+				cm.Data[ackLogLevel] = string(l)
+			}
+			if t, ok := credentialsRef.Data[ackResourceTags]; ok {
+				cm.Data[ackResourceTags] = string(t)
+			}
+		} else {
+			cm.Data[awsRegion] = "dummy"
 		}
 		return nil
 	})
@@ -763,13 +764,13 @@ func (r *RDSInventoryReconciler) createOrUpdateConfigMap(ctx context.Context, in
 	return nil
 }
 
-func buildInventoryLabels() map[string]string {
+func buildDBaaSLabels() map[string]string {
 	return map[string]string{
 		dbaasv1alpha1.TypeLabelKey: dbaasv1alpha1.TypeLabelValue,
 	}
 }
 
-func buildInventoryAnnotations(inventory *rdsdbaasv1alpha1.RDSInventory, obj *metav1.ObjectMeta) map[string]string {
+func (r *RDSInventoryReconciler) buildDBaaSAnnotations(obj *metav1.ObjectMeta) map[string]string {
 	annotations := map[string]string{}
 	if obj.Annotations != nil {
 		for key, value := range obj.Annotations {
@@ -777,9 +778,9 @@ func buildInventoryAnnotations(inventory *rdsdbaasv1alpha1.RDSInventory, obj *me
 		}
 	}
 	annotations["managed-by"] = "rds-dbaas-operator"
-	annotations["owner"] = inventory.Name
-	annotations["owner.kind"] = inventory.Kind
-	annotations["owner.namespace"] = inventory.Namespace
+	annotations["owner"] = ackDeploymentName
+	annotations["owner.kind"] = "Deployment"
+	annotations["owner.namespace"] = r.ACKInstallNamespace
 	return annotations
 }
 
@@ -927,6 +928,13 @@ func (r *RDSInventoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 	if err := r.installCRD(ctx, cli, filepath.Join(r.RDSCRDFilePath, fieldExportCRDFile)); err != nil {
+		return err
+	}
+
+	if err := r.createOrUpdateSecret(ctx, cli, nil); err != nil {
+		return err
+	}
+	if err := r.createOrUpdateConfigMap(ctx, cli, nil); err != nil {
 		return err
 	}
 
