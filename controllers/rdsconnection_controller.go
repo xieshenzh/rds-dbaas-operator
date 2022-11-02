@@ -41,7 +41,7 @@ import (
 )
 
 const (
-	instanceIDKey = ".spec.instanceID"
+	databaseServiceIDKey = ".spec.databaseServiceID"
 
 	databaseProvider = "Red Hat DBaaS / Amazon Relational Database Service (RDS)"
 
@@ -145,14 +145,15 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	checkDBInstanceStatus := func() bool {
 		var instanceName *string
-		for _, ins := range inventory.Status.Instances {
-			if ins.InstanceID == connection.Spec.InstanceID {
-				instanceName = &ins.Name
+		for _, ds := range inventory.Status.DatabaseServices {
+			if ds.ServiceType == dbaasv1alpha1.InstanceDatabaseService &&
+				ds.ServiceID == connection.Spec.DatabaseServiceID {
+				instanceName = &ds.ServiceName
 				break
 			}
 		}
 		if instanceName == nil {
-			e := fmt.Errorf("instance %s not found", connection.Spec.InstanceID)
+			e := fmt.Errorf("instance %s not found", connection.Spec.DatabaseServiceID)
 			logger.Error(e, "DB Instance not found from Inventory")
 			returnError(e, connectionStatusReasonNotFound, connectionStatusMessageInstanceNotFound)
 			return true
@@ -165,7 +166,7 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			return true
 		}
 		if dbInstance.Status.DBInstanceStatus == nil || *dbInstance.Status.DBInstanceStatus != "available" {
-			e := fmt.Errorf("instance %s not ready", connection.Spec.InstanceID)
+			e := fmt.Errorf("instance %s not ready", connection.Spec.DatabaseServiceID)
 			logger.Error(e, "DB Instance not ready")
 			returnError(e, connectionStatusReasonUnreachable, connectionStatusMessageInstanceNotReady)
 			return true
@@ -175,7 +176,7 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	checkDBConnectionStatus := func() bool {
 		if dbInstance.Spec.MasterUserPassword == nil {
-			e := fmt.Errorf("instance %s master password not set", connection.Spec.InstanceID)
+			e := fmt.Errorf("instance %s master password not set", connection.Spec.DatabaseServiceID)
 			logger.Error(e, "DB Instance master password not set")
 			returnError(e, connectionStatusReasonInputError, connectionStatusMessagePasswordNotFound)
 			return true
@@ -192,20 +193,20 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			return true
 		}
 		if v, ok := masterUserSecret.Data[dbInstance.Spec.MasterUserPassword.Key]; !ok || len(v) == 0 {
-			e := fmt.Errorf("instance %s master password key not set", connection.Spec.InstanceID)
+			e := fmt.Errorf("instance %s master password key not set", connection.Spec.DatabaseServiceID)
 			logger.Error(e, "DB Instance master password key not set")
 			returnError(e, connectionStatusReasonInputError, connectionStatusMessagePasswordInvalid)
 			return true
 		}
 		if dbInstance.Spec.MasterUsername == nil {
-			e := fmt.Errorf("instance %s master username not set", connection.Spec.InstanceID)
+			e := fmt.Errorf("instance %s master username not set", connection.Spec.DatabaseServiceID)
 			logger.Error(e, "DB Instance master username not set")
 			returnError(e, connectionStatusReasonInputError, connectionStatusMessageUsernameNotFound)
 			return true
 		}
 
 		if dbInstance.Status.Endpoint == nil {
-			e := fmt.Errorf("instance %s endpoint not found", connection.Spec.InstanceID)
+			e := fmt.Errorf("instance %s endpoint not found", connection.Spec.DatabaseServiceID)
 			logger.Error(e, "DB Instance endpoint not found")
 			returnError(e, connectionStatusReasonUnreachable, connectionStatusMessageEndpointNotFound)
 			return true
@@ -418,9 +419,9 @@ func (r *RDSConnectionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 
-	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &rdsdbaasv1alpha1.RDSConnection{}, instanceIDKey, func(rawObj client.Object) []string {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &rdsdbaasv1alpha1.RDSConnection{}, databaseServiceIDKey, func(rawObj client.Object) []string {
 		connection := rawObj.(*rdsdbaasv1alpha1.RDSConnection)
-		instanceID := connection.Spec.InstanceID
+		instanceID := connection.Spec.DatabaseServiceID
 		return []string{instanceID}
 	}); err != nil {
 		return err
@@ -436,7 +437,7 @@ func getInstanceConnectionRequests(object client.Object, mgr ctrl.Manager) []rec
 
 	dbInstance := object.(*rdsv1alpha1.DBInstance)
 	connectionList := &rdsdbaasv1alpha1.RDSConnectionList{}
-	if e := cli.List(ctx, connectionList, client.MatchingFields{instanceIDKey: *dbInstance.Spec.DBInstanceIdentifier}); e != nil {
+	if e := cli.List(ctx, connectionList, client.MatchingFields{databaseServiceIDKey: *dbInstance.Spec.DBInstanceIdentifier}); e != nil {
 		logger.Error(e, "Failed to get Connections for DB Instance update", "DBInstance ID", dbInstance.Spec.DBInstanceIdentifier)
 		return nil
 	}

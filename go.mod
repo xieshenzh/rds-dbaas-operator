@@ -86,3 +86,5 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
+
+replace github.com/RHEcosystemAppEng/dbaas-operator => github.com/xieshenzh/dbaas-operator v1.0.1-0.20221121204210-9334898ddc99

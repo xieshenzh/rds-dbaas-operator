@@ -164,7 +164,7 @@ var _ = Describe("RDSConnectionController", func() {
 						Name:      inventoryName,
 						Namespace: testNamespace,
 					},
-					InstanceID: instanceID,
+					DatabaseServiceID: instanceID,
 				},
 			}
 			BeforeEach(assertResourceCreation(connection))
@@ -260,7 +260,7 @@ var _ = Describe("RDSConnectionController", func() {
 								if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(conn), conn); err != nil {
 									return false
 								}
-								conn.Spec.InstanceID = "instance-id-connection-controller-not-exist"
+								conn.Spec.DatabaseServiceID = "instance-id-connection-controller-not-exist"
 								err := k8sClient.Update(ctx, conn)
 								return err == nil
 							}, timeout).Should(BeTrue())
@@ -661,7 +661,7 @@ var _ = Describe("RDSConnectionController", func() {
 							Name:      inventoryName,
 							Namespace: testNamespace,
 						},
-						InstanceID: instanceIDOracle,
+						DatabaseServiceID: instanceIDOracle,
 					},
 				}
 				BeforeEach(assertResourceCreation(connection))
@@ -747,7 +747,7 @@ var _ = Describe("RDSConnectionController", func() {
 							Name:      inventoryName,
 							Namespace: testNamespace,
 						},
-						InstanceID: instanceIDSqlServer,
+						DatabaseServiceID: instanceIDSqlServer,
 					},
 				}
 				BeforeEach(assertResourceCreation(connection))
