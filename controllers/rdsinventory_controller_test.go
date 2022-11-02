@@ -1225,48 +1225,48 @@ var _ = Describe("RDSInventoryController", func() {
 							if condition == nil || condition.Status != metav1.ConditionTrue || condition.Reason != "SyncOK" {
 								return false
 							}
-							if len(inv.Status.Instances) < 9 {
+							if len(inv.Status.DatabaseServices) < 9 {
 								return false
 							}
-							instancesMap := map[string]dbaasv1beta1.Instance{}
-							for i := range inv.Status.Instances {
-								ins := inv.Status.Instances[i]
-								instancesMap[ins.InstanceID] = ins
+							servicesMap := map[string]dbaasv1beta1.DatabaseService{}
+							for i := range inv.Status.DatabaseServices {
+								ds := inv.Status.DatabaseServices[i]
+								servicesMap[ds.ServiceID] = ds
 							}
-							if _, ok := instancesMap[*dbInstance1.Spec.DBInstanceIdentifier]; ok {
+							if _, ok := servicesMap[*dbInstance1.Spec.DBInstanceIdentifier]; ok {
 								return false
 							}
-							if _, ok := instancesMap[*dbInstance2.Spec.DBInstanceIdentifier]; ok {
+							if _, ok := servicesMap[*dbInstance2.Spec.DBInstanceIdentifier]; ok {
 								return false
 							}
-							if ins, ok := instancesMap[*dbInstance3.Spec.DBInstanceIdentifier]; !ok {
+							if ds, ok := servicesMap[*dbInstance3.Spec.DBInstanceIdentifier]; !ok {
 								return false
 							} else {
-								Expect(ins.Name).Should(Equal(dbInstance3.Name))
-								s, ok := ins.InstanceInfo["dbInstanceStatus"]
+								Expect(ds.ServiceName).Should(Equal(dbInstance3.Name))
+								s, ok := ds.ServiceInfo["dbInstanceStatus"]
 								Expect(ok).Should(BeTrue())
 								Expect(s).Should(Equal(*dbInstance3.Status.DBInstanceStatus))
 							}
-							if ins, ok := instancesMap[*dbInstance4.Spec.DBInstanceIdentifier]; !ok {
+							if ds, ok := servicesMap[*dbInstance4.Spec.DBInstanceIdentifier]; !ok {
 								return false
 							} else {
-								Expect(ins.Name).Should(Equal(dbInstance4.Name))
-								s, ok := ins.InstanceInfo["dbInstanceStatus"]
+								Expect(ds.ServiceName).Should(Equal(dbInstance4.Name))
+								s, ok := ds.ServiceInfo["dbInstanceStatus"]
 								Expect(ok).Should(BeTrue())
 								Expect(s).Should(Equal(*dbInstance4.Status.DBInstanceStatus))
 							}
-							if ins, ok := instancesMap[*dbInstance5.Spec.DBInstanceIdentifier]; !ok {
+							if ds, ok := servicesMap[*dbInstance5.Spec.DBInstanceIdentifier]; !ok {
 								return false
 							} else {
-								Expect(ins.Name).Should(Equal(dbInstance5.Name))
-								s, ok := ins.InstanceInfo["dbInstanceStatus"]
+								Expect(ds.ServiceName).Should(Equal(dbInstance5.Name))
+								s, ok := ds.ServiceInfo["dbInstanceStatus"]
 								Expect(ok).Should(BeTrue())
 								Expect(s).Should(Equal(*dbInstance5.Status.DBInstanceStatus))
 							}
-							if _, ok := instancesMap[*dbInstance14.Spec.DBInstanceIdentifier]; ok {
+							if _, ok := servicesMap[*dbInstance14.Spec.DBInstanceIdentifier]; ok {
 								return false
 							}
-							if _, ok := instancesMap[*dbInstance15.Spec.DBInstanceIdentifier]; !ok {
+							if _, ok := servicesMap[*dbInstance15.Spec.DBInstanceIdentifier]; !ok {
 								return false
 							}
 							return true
@@ -1990,7 +1990,7 @@ var _ = Describe("RDSInventoryController", func() {
 					if condition != nil {
 						return false
 					}
-					if len(inv.Status.Instances) > 0 {
+					if len(inv.Status.DatabaseServices) > 0 {
 						return false
 					}
 					return true
@@ -2162,7 +2162,7 @@ var _ = Describe("RDSInventoryController", func() {
 					if condition == nil || condition.Status != metav1.ConditionTrue || condition.Reason != "SyncOK" {
 						return false
 					}
-					if len(inv.Status.Instances) > 0 {
+					if len(inv.Status.DatabaseServices) > 0 {
 						return false
 					}
 					return true

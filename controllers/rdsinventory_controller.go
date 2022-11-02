@@ -607,6 +607,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 
 		var instances []dbaasv1beta1.Instance
+		var services []dbaasv1alpha1.DatabaseService
 		for i := range dbInstanceList.Items {
 			dbInstance := dbInstanceList.Items[i]
 			if dbInstance.Spec.DBInstanceIdentifier == nil ||
@@ -622,8 +623,16 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				InstanceInfo: parseDBInstanceStatus(&dbInstance),
 			}
 			instances = append(instances, instance)
+			service := dbaasv1alpha1.DatabaseService{
+				ServiceID:   *dbInstance.Spec.DBInstanceIdentifier,
+				ServiceName: dbInstance.Name,
+				ServiceType: dbaasv1alpha1.InstanceDatabaseService,
+				ServiceInfo: parseDBInstanceStatus(&dbInstance),
+			}
+			services = append(services, service)
 		}
 		inventory.Status.Instances = instances
+		inventory.Status.DatabaseServices = services
 
 		if e := r.Status().Update(ctx, &inventory); e != nil {
 			if errors.IsConflict(e) {
