@@ -41,6 +41,7 @@ import (
 
 	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
 	rdsdbaasv1alpha1 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
+	rdsdbaasv1alpha2 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha2"
 	rdsv1alpha1 "github.com/aws-controllers-k8s/rds-controller/apis/v1alpha1"
 	ackv1alpha1 "github.com/aws-controllers-k8s/runtime/apis/core/v1alpha1"
 	ophandler "github.com/operator-framework/operator-lib/handler"
@@ -118,7 +119,7 @@ type RDSInstanceReconciler struct {
 func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	logger := log.FromContext(ctx)
 
-	var inventory rdsdbaasv1alpha1.RDSInventory
+	var inventory rdsdbaasv1alpha2.RDSInventory
 	var instance rdsdbaasv1alpha1.RDSInstance
 
 	var provisionStatus, provisionStatusReason, provisionStatusMessage string

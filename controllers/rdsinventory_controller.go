@@ -45,7 +45,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
-	rdsdbaasv1alpha1 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
+	dbaasv1alpha2 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha2"
+	rdsdbaasv1alpha2 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha2"
 	controllersrds "github.com/RHEcosystemAppEng/rds-dbaas-operator/controllers/rds"
 	rdsv1alpha1 "github.com/aws-controllers-k8s/rds-controller/apis/v1alpha1"
 	ackv1alpha1 "github.com/aws-controllers-k8s/runtime/apis/core/v1alpha1"
@@ -141,7 +142,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	var syncStatus, syncStatusReason, syncStatusMessage string
 	var syncReset bool
 
-	var inventory rdsdbaasv1alpha1.RDSInventory
+	var inventory rdsdbaasv1alpha2.RDSInventory
 	var credentialsRef v1.Secret
 
 	var accessKey, secretKey, region string
@@ -606,7 +607,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return true
 		}
 
-		var instances []dbaasv1alpha1.Instance
+		var services []dbaasv1alpha2.DatabaseService
 		for i := range dbInstanceList.Items {
 			dbInstance := dbInstanceList.Items[i]
 			if dbInstance.Spec.DBInstanceIdentifier == nil ||
@@ -616,14 +617,15 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			if _, ok := awsDBInstanceIdentifiers[string(*dbInstance.Status.ACKResourceMetadata.ARN)]; !ok {
 				continue
 			}
-			instance := dbaasv1alpha1.Instance{
-				InstanceID:   *dbInstance.Spec.DBInstanceIdentifier,
-				Name:         dbInstance.Name,
-				InstanceInfo: parseDBInstanceStatus(&dbInstance),
+			instance := dbaasv1alpha2.DatabaseService{
+				ServiceID:   *dbInstance.Spec.DBInstanceIdentifier,
+				ServiceName: dbInstance.Name,
+				ServiceType: dbaasv1alpha2.InstanceDatabaseService,
+				ServiceInfo: parseDBInstanceStatus(&dbInstance),
 			}
-			instances = append(instances, instance)
+			services = append(services, instance)
 		}
-		inventory.Status.Instances = instances
+		inventory.Status.DatabaseServices = services
 
 		if e := r.Status().Update(ctx, &inventory); e != nil {
 			if errors.IsConflict(e) {
@@ -875,7 +877,7 @@ func (r *RDSInventoryReconciler) startRDSController(ctx context.Context) error {
 	return nil
 }
 
-func createAdoptedResource(dbInstance *rdstypesv2.DBInstance, inventory *rdsdbaasv1alpha1.RDSInventory) *ackv1alpha1.AdoptedResource {
+func createAdoptedResource(dbInstance *rdstypesv2.DBInstance, inventory *rdsdbaasv1alpha2.RDSInventory) *ackv1alpha1.AdoptedResource {
 	arn := ackv1alpha1.AWSResourceName(*dbInstance.DBInstanceArn)
 	return &ackv1alpha1.AdoptedResource{
 		ObjectMeta: metav1.ObjectMeta{
@@ -939,7 +941,7 @@ func (r *RDSInventoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&rdsdbaasv1alpha1.RDSInventory{}).
+		For(&rdsdbaasv1alpha2.RDSInventory{}).
 		Watches(
 			&source.Kind{Type: &rdsv1alpha1.DBInstance{}},
 			handler.EnqueueRequestsFromMapFunc(func(o client.Object) []reconcile.Request {
@@ -961,7 +963,7 @@ func getInstanceInventoryRequests(object client.Object, mgr ctrl.Manager) []reco
 	cli := mgr.GetClient()
 
 	dbInstance := object.(*rdsv1alpha1.DBInstance)
-	inventoryList := &rdsdbaasv1alpha1.RDSInventoryList{}
+	inventoryList := &rdsdbaasv1alpha2.RDSInventoryList{}
 	if e := cli.List(ctx, inventoryList, client.InNamespace(dbInstance.Namespace)); e != nil {
 		logger.Error(e, "Failed to get Inventories for DB Instance update", "DBInstance ID", dbInstance.Spec.DBInstanceIdentifier)
 		return nil
@@ -988,7 +990,7 @@ func getACKDeploymentInventoryRequests(object client.Object, namespace string, m
 
 	var requests []reconcile.Request
 	if deployment.Name == ackDeploymentName && deployment.Namespace == namespace {
-		inventoryList := &rdsdbaasv1alpha1.RDSInventoryList{}
+		inventoryList := &rdsdbaasv1alpha2.RDSInventoryList{}
 		if e := cli.List(ctx, inventoryList); e != nil {
 			logger.Error(e, "Failed to get Inventories for ACK controller update")
 			return nil

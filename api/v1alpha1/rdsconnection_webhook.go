@@ -22,9 +22,9 @@ import (
 )
 
 // log is for logging in this package.
-var rdsinventorylog = logf.Log.WithName("rdsinventory-resource")
+var rdsconnectionlog = logf.Log.WithName("rdsconnection-resource")
 
-func (r *RDSInventory) SetupWebhookWithManager(mgr ctrl.Manager) error {
+func (r *RDSConnection) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
 		Complete()

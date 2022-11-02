@@ -43,6 +43,8 @@ import (
 
 	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
 	rdsdbaasv1alpha1 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
+	dbaasv1alpha2 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha2"
+	rdsdbaasv1alpha2 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha2"
 	"github.com/RHEcosystemAppEng/rds-dbaas-operator/controllers"
 	controllersrds "github.com/RHEcosystemAppEng/rds-dbaas-operator/controllers/rds"
 	rdsv1alpha1 "github.com/aws-controllers-k8s/rds-controller/apis/v1alpha1"
@@ -63,7 +65,9 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(rdsdbaasv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(rdsdbaasv1alpha2.AddToScheme(scheme))
 	utilruntime.Must(dbaasv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(dbaasv1alpha2.AddToScheme(scheme))
 	utilruntime.Must(rdsv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(ackv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(appsv1.AddToScheme(scheme))
@@ -184,6 +188,18 @@ func main() {
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
 		if err = (&rdsdbaasv1alpha1.RDSInventory{}).SetupWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "RDSInventory")
+			os.Exit(1)
+		}
+		if err = (&rdsdbaasv1alpha1.RDSConnection{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "RDSConnection")
+			os.Exit(1)
+		}
+		if err = (&rdsdbaasv1alpha2.RDSInventory{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "RDSInventory")
+			os.Exit(1)
+		}
+		if err = (&dbaasv1alpha2.RDSConnection{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "RDSConnection")
 			os.Exit(1)
 		}
 	}

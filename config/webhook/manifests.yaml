@@ -11,14 +11,14 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-dbaas-redhat-com-v1alpha1-rdsinventory
+      path: /validate-dbaas-redhat-com-v1alpha2-rdsinventory
   failurePolicy: Fail
   name: vrdsinventory.kb.io
   rules:
   - apiGroups:
     - dbaas.redhat.com
     apiVersions:
-    - v1alpha1
+    - v1alpha2
     operations:
     - CREATE
     resources:

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha1
+package v1alpha2
 
 import (
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -22,9 +22,9 @@ import (
 )
 
 // log is for logging in this package.
-var rdsinventorylog = logf.Log.WithName("rdsinventory-resource")
+var rdsconnectionlog = logf.Log.WithName("rdsconnection-resource")
 
-func (r *RDSInventory) SetupWebhookWithManager(mgr ctrl.Manager) error {
+func (r *RDSConnection) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
 		Complete()

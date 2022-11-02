@@ -21,12 +21,22 @@ spec:
       displayName: RDSConnection
       kind: RDSConnection
       name: rdsconnections.dbaas.redhat.com
+      version: v1alpha2
+    - description: RDSConnection is the Schema for the rdsconnections API
+      displayName: RDSConnection
+      kind: RDSConnection
+      name: rdsconnections.dbaas.redhat.com
       version: v1alpha1
     - description: RDSInstance is the Schema for the rdsinstances API
       displayName: RDSInstance
       kind: RDSInstance
       name: rdsinstances.dbaas.redhat.com
       version: v1alpha1
+    - description: RDSInventory is the Schema for the rdsinventories API
+      displayName: RDSInventory
+      kind: RDSInventory
+      name: rdsinventories.dbaas.redhat.com
+      version: v1alpha2
     - description: RDSInventory is the Schema for the rdsinventories API
       displayName: RDSInventory
       kind: RDSInventory

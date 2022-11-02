@@ -3,4 +3,6 @@ resources:
 - dbaas_v1alpha1_rdsinventory.yaml
 - dbaas_v1alpha1_rdsconnection.yaml
 - dbaas_v1alpha1_rdsinstance.yaml
+- dbaas_v1alpha2_rdsinventory.yaml
+- dbaas_v1alpha2_rdsconnection.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

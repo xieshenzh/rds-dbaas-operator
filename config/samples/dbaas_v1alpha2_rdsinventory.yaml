@@ -1,0 +1,14 @@
+apiVersion: dbaas.redhat.com/v1alpha2
+kind: RDSInventory
+metadata:
+  labels:
+    app.kubernetes.io/name: rdsinventory
+    app.kubernetes.io/instance: rdsinventory-sample
+    app.kubernetes.io/part-of: rds-dbaas-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: rds-dbaas-operator
+  name: rdsinventory-sample
+spec:
+  credentialsRef:
+    namespace: rds-sample
+    name: rds-credentials-sample

@@ -14,18 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha1
+package v1alpha2
 
-import (
-	ctrl "sigs.k8s.io/controller-runtime"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
-)
-
-// log is for logging in this package.
-var rdsinventorylog = logf.Log.WithName("rdsinventory-resource")
-
-func (r *RDSInventory) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
-		Complete()
-}
+// Hub marks this type as a conversion hub.
+func (*RDSInventory) Hub() {}

@@ -28,8 +28,8 @@ import (
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
-	rdsdbaasv1alpha1 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
+	dbaasv1alpha2 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha2"
+	rdsdbaasv1alpha2 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha2"
 	"github.com/RHEcosystemAppEng/rds-dbaas-operator/controllers/rds/test"
 	rdsv1alpha1 "github.com/aws-controllers-k8s/rds-controller/apis/v1alpha1"
 	ackv1alpha1 "github.com/aws-controllers-k8s/runtime/apis/core/v1alpha1"
@@ -154,17 +154,17 @@ var _ = Describe("RDSConnectionController", func() {
 			connectionName := "rds-connection-connection-controller"
 			inventoryName := "rds-inventory-connection-controller"
 
-			connection := &rdsdbaasv1alpha1.RDSConnection{
+			connection := &rdsdbaasv1alpha2.RDSConnection{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      connectionName,
 					Namespace: testNamespace,
 				},
-				Spec: dbaasv1alpha1.DBaaSConnectionSpec{
-					InventoryRef: dbaasv1alpha1.NamespacedName{
+				Spec: dbaasv1alpha2.DBaaSConnectionSpec{
+					InventoryRef: dbaasv1alpha2.NamespacedName{
 						Name:      inventoryName,
 						Namespace: testNamespace,
 					},
-					InstanceID: instanceID,
+					DatabaseServiceID: instanceID,
 				},
 			}
 			BeforeEach(assertResourceCreation(connection))
@@ -172,7 +172,7 @@ var _ = Describe("RDSConnectionController", func() {
 
 			Context("when Inventory is not created", func() {
 				It("should make Connection in error status", func() {
-					conn := &rdsdbaasv1alpha1.RDSConnection{
+					conn := &rdsdbaasv1alpha2.RDSConnection{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      connectionName,
 							Namespace: testNamespace,
@@ -194,13 +194,13 @@ var _ = Describe("RDSConnectionController", func() {
 			Context("when Inventory is created", func() {
 				credentialName := "credentials-ref-connection-controller"
 
-				inventory := &rdsdbaasv1alpha1.RDSInventory{
+				inventory := &rdsdbaasv1alpha2.RDSInventory{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      inventoryName,
 						Namespace: testNamespace,
 					},
-					Spec: dbaasv1alpha1.DBaaSInventorySpec{
-						CredentialsRef: &dbaasv1alpha1.LocalObjectReference{
+					Spec: dbaasv1alpha2.DBaaSInventorySpec{
+						CredentialsRef: &dbaasv1alpha2.LocalObjectReference{
 							Name: credentialName,
 						},
 					},
@@ -210,7 +210,7 @@ var _ = Describe("RDSConnectionController", func() {
 
 				Context("when Inventory is not ready", func() {
 					It("should make Connection in error status", func() {
-						conn := &rdsdbaasv1alpha1.RDSConnection{
+						conn := &rdsdbaasv1alpha2.RDSConnection{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      connectionName,
 								Namespace: testNamespace,
@@ -250,7 +250,7 @@ var _ = Describe("RDSConnectionController", func() {
 
 					Context("when Instance is not found", func() {
 						BeforeEach(func() {
-							conn := &rdsdbaasv1alpha1.RDSConnection{
+							conn := &rdsdbaasv1alpha2.RDSConnection{
 								ObjectMeta: metav1.ObjectMeta{
 									Name:      connectionName,
 									Namespace: testNamespace,
@@ -260,14 +260,14 @@ var _ = Describe("RDSConnectionController", func() {
 								if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(conn), conn); err != nil {
 									return false
 								}
-								conn.Spec.InstanceID = "instance-id-connection-controller-not-exist"
+								conn.Spec.DatabaseServiceID = "instance-id-connection-controller-not-exist"
 								err := k8sClient.Update(ctx, conn)
 								return err == nil
 							}, timeout).Should(BeTrue())
 						})
 
 						It("should make Connection in error status", func() {
-							conn := &rdsdbaasv1alpha1.RDSConnection{
+							conn := &rdsdbaasv1alpha2.RDSConnection{
 								ObjectMeta: metav1.ObjectMeta{
 									Name:      connectionName,
 									Namespace: testNamespace,
@@ -289,7 +289,7 @@ var _ = Describe("RDSConnectionController", func() {
 					Context("when Inventory and Instance are created", func() {
 						Context("when Instance is not ready", func() {
 							It("should make Connection in error status", func() {
-								conn := &rdsdbaasv1alpha1.RDSConnection{
+								conn := &rdsdbaasv1alpha2.RDSConnection{
 									ObjectMeta: metav1.ObjectMeta{
 										Name:      connectionName,
 										Namespace: testNamespace,
@@ -322,7 +322,7 @@ var _ = Describe("RDSConnectionController", func() {
 
 							Context("when the Instance user password is not set", func() {
 								It("should make Connection in error status", func() {
-									conn := &rdsdbaasv1alpha1.RDSConnection{
+									conn := &rdsdbaasv1alpha2.RDSConnection{
 										ObjectMeta: metav1.ObjectMeta{
 											Name:      connectionName,
 											Namespace: testNamespace,
@@ -361,7 +361,7 @@ var _ = Describe("RDSConnectionController", func() {
 
 								Context("when the Instance user password Secret is not created", func() {
 									It("should make Connection in error status", func() {
-										conn := &rdsdbaasv1alpha1.RDSConnection{
+										conn := &rdsdbaasv1alpha2.RDSConnection{
 											ObjectMeta: metav1.ObjectMeta{
 												Name:      connectionName,
 												Namespace: testNamespace,
@@ -392,7 +392,7 @@ var _ = Describe("RDSConnectionController", func() {
 
 									Context("when the Instance user password Secret is not valid", func() {
 										It("should make Connection in error status", func() {
-											conn := &rdsdbaasv1alpha1.RDSConnection{
+											conn := &rdsdbaasv1alpha2.RDSConnection{
 												ObjectMeta: metav1.ObjectMeta{
 													Name:      connectionName,
 													Namespace: testNamespace,
@@ -427,7 +427,7 @@ var _ = Describe("RDSConnectionController", func() {
 
 										Context("when the Instance user name is not set", func() {
 											It("should make Connection in error status", func() {
-												conn := &rdsdbaasv1alpha1.RDSConnection{
+												conn := &rdsdbaasv1alpha2.RDSConnection{
 													ObjectMeta: metav1.ObjectMeta{
 														Name:      connectionName,
 														Namespace: testNamespace,
@@ -460,7 +460,7 @@ var _ = Describe("RDSConnectionController", func() {
 
 											Context("when the Instance endpoint is not available", func() {
 												It("should make Connection in error status", func() {
-													conn := &rdsdbaasv1alpha1.RDSConnection{
+													conn := &rdsdbaasv1alpha2.RDSConnection{
 														ObjectMeta: metav1.ObjectMeta{
 															Name:      connectionName,
 															Namespace: testNamespace,
@@ -497,7 +497,7 @@ var _ = Describe("RDSConnectionController", func() {
 												Context("when the Instance connection info is complete", func() {
 													It("should create Secret and ConfigMap for binding", func() {
 														By("checking the status of the Connection")
-														conn := &rdsdbaasv1alpha1.RDSConnection{
+														conn := &rdsdbaasv1alpha2.RDSConnection{
 															ObjectMeta: metav1.ObjectMeta{
 																Name:      connectionName,
 																Namespace: testNamespace,
@@ -608,13 +608,13 @@ var _ = Describe("RDSConnectionController", func() {
 			AfterEach(assertResourceDeletion(credential))
 
 			inventoryName := "rds-inventory-jdbc-url-connection-controller"
-			inventory := &rdsdbaasv1alpha1.RDSInventory{
+			inventory := &rdsdbaasv1alpha2.RDSInventory{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      inventoryName,
 					Namespace: testNamespace,
 				},
-				Spec: dbaasv1alpha1.DBaaSInventorySpec{
-					CredentialsRef: &dbaasv1alpha1.LocalObjectReference{
+				Spec: dbaasv1alpha2.DBaaSInventorySpec{
+					CredentialsRef: &dbaasv1alpha2.LocalObjectReference{
 						Name: credentialName,
 					},
 				},
@@ -651,17 +651,17 @@ var _ = Describe("RDSConnectionController", func() {
 				})
 
 				connectionName := "rds-connection-oracle-connection-controller"
-				connection := &rdsdbaasv1alpha1.RDSConnection{
+				connection := &rdsdbaasv1alpha2.RDSConnection{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      connectionName,
 						Namespace: testNamespace,
 					},
-					Spec: dbaasv1alpha1.DBaaSConnectionSpec{
-						InventoryRef: dbaasv1alpha1.NamespacedName{
+					Spec: dbaasv1alpha2.DBaaSConnectionSpec{
+						InventoryRef: dbaasv1alpha2.NamespacedName{
 							Name:      inventoryName,
 							Namespace: testNamespace,
 						},
-						InstanceID: instanceIDOracle,
+						DatabaseServiceID: instanceIDOracle,
 					},
 				}
 				BeforeEach(assertResourceCreation(connection))
@@ -669,7 +669,7 @@ var _ = Describe("RDSConnectionController", func() {
 
 				It("should add jdbc-url to the ConfigMap for service binding", func() {
 					By("checking the status of the Connection")
-					conn := &rdsdbaasv1alpha1.RDSConnection{
+					conn := &rdsdbaasv1alpha2.RDSConnection{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      connectionName,
 							Namespace: testNamespace,
@@ -737,17 +737,17 @@ var _ = Describe("RDSConnectionController", func() {
 				})
 
 				connectionName := "rds-connection-sqlserver-connection-controller"
-				connection := &rdsdbaasv1alpha1.RDSConnection{
+				connection := &rdsdbaasv1alpha2.RDSConnection{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      connectionName,
 						Namespace: testNamespace,
 					},
-					Spec: dbaasv1alpha1.DBaaSConnectionSpec{
-						InventoryRef: dbaasv1alpha1.NamespacedName{
+					Spec: dbaasv1alpha2.DBaaSConnectionSpec{
+						InventoryRef: dbaasv1alpha2.NamespacedName{
 							Name:      inventoryName,
 							Namespace: testNamespace,
 						},
-						InstanceID: instanceIDSqlServer,
+						DatabaseServiceID: instanceIDSqlServer,
 					},
 				}
 				BeforeEach(assertResourceCreation(connection))
@@ -755,7 +755,7 @@ var _ = Describe("RDSConnectionController", func() {
 
 				It("should add jdbc-url to the ConfigMap for service binding", func() {
 					By("checking the status of the Connection")
-					conn := &rdsdbaasv1alpha1.RDSConnection{
+					conn := &rdsdbaasv1alpha2.RDSConnection{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      connectionName,
 							Namespace: testNamespace,

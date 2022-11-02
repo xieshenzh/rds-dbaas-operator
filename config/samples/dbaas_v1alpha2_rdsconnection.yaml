@@ -1,0 +1,16 @@
+apiVersion: dbaas.redhat.com/v1alpha2
+kind: RDSConnection
+metadata:
+  labels:
+    app.kubernetes.io/name: rdsconnection
+    app.kubernetes.io/instance: rdsconnection-sample
+    app.kubernetes.io/part-of: rds-dbaas-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: rds-dbaas-operator
+  name: rdsconnection-sample
+spec:
+  inventoryRef:
+    namespace: rds-sample
+    name: rdsinventory-sample
+  databaseServiceID: rds-instance-sample
+  databaseServiceType: instance

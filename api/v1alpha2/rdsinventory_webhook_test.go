@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha1_test
+package v1alpha2_test
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -24,21 +24,21 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
-	"github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
+	dbaasv1alpha2 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha2"
+	"github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha2"
 )
 
 var _ = Describe("RDSInventoryWebhook", func() {
 	Context("after creating RDSInventory", func() {
 		rdsInventoryName := "rds-inventory-webhook"
 		credentialsRefName := "credentials-ref-webhook"
-		rdsInventory := &v1alpha1.RDSInventory{
+		rdsInventory := &v1alpha2.RDSInventory{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      rdsInventoryName,
 				Namespace: testNamespace,
 			},
-			Spec: dbaasv1alpha1.DBaaSInventorySpec{
-				CredentialsRef: &dbaasv1alpha1.LocalObjectReference{
+			Spec: dbaasv1alpha2.DBaaSInventorySpec{
+				CredentialsRef: &dbaasv1alpha2.LocalObjectReference{
 					Name: credentialsRefName,
 				},
 			},
@@ -50,7 +50,7 @@ var _ = Describe("RDSInventoryWebhook", func() {
 
 			By("checking RDSInventory created")
 			Eventually(func() bool {
-				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rdsInventory), &v1alpha1.RDSInventory{}); err != nil {
+				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rdsInventory), &v1alpha2.RDSInventory{}); err != nil {
 					return false
 				}
 				return true
@@ -63,7 +63,7 @@ var _ = Describe("RDSInventoryWebhook", func() {
 
 			By("checking RDSInventory deleted")
 			Eventually(func() bool {
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rdsInventory), &v1alpha1.RDSInventory{})
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rdsInventory), &v1alpha2.RDSInventory{})
 				if err != nil && errors.IsNotFound(err) {
 					return true
 				}
@@ -74,13 +74,13 @@ var _ = Describe("RDSInventoryWebhook", func() {
 		Context("after creating another RDSInventory", func() {
 			It("should not allow creating RDSInventory", func() {
 				rdsInventoryNotAllowedName := "rds-inventory-webhook-not-allowed"
-				rdsInventoryNotAllowed := &v1alpha1.RDSInventory{
+				rdsInventoryNotAllowed := &v1alpha2.RDSInventory{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      rdsInventoryNotAllowedName,
 						Namespace: testNamespace,
 					},
-					Spec: dbaasv1alpha1.DBaaSInventorySpec{
-						CredentialsRef: &dbaasv1alpha1.LocalObjectReference{
+					Spec: dbaasv1alpha2.DBaaSInventorySpec{
+						CredentialsRef: &dbaasv1alpha2.LocalObjectReference{
 							Name: credentialsRefName,
 						},
 					},
