@@ -290,6 +290,21 @@ func getDefaultAvailabilityZone(region string) *string {
 	return nil
 }
 
+func getDefaultDBPort(engine string) *int64 {
+	switch engine {
+	case postgres, auroraPostgresql:
+		return pointer.Int64(5432)
+	case sqlserverEe, sqlserverSe, sqlserverEx, sqlserverWeb, customSqlserverEe, customSqlserverSe, customSqlserverWeb:
+		return pointer.Int64(1433)
+	case oracleSe2, oracleSe2Cdb, oracleEe, oracleEeCdb, customOracleEe:
+		return pointer.Int64(1521)
+	case mysql, mariadb, aurora, auroraMysql:
+		return pointer.Int64(3306)
+	default:
+		return nil
+	}
+}
+
 func getDBEngineAbbreviation(engine *string) string {
 	if engine == nil {
 		return ""
