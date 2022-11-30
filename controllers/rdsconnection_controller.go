@@ -220,8 +220,13 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			engine = s.Spec.Engine
 			password = s.Spec.MasterUserPassword
 			username = s.Spec.MasterUsername
-			host = s.Status.Endpoint.Address
-			port = s.Status.Endpoint.Port
+			if s.Status.Endpoint != nil {
+				host = s.Status.Endpoint.Address
+				port = s.Status.Endpoint.Port
+			} else {
+				host = nil
+				port = nil
+			}
 			dbName = s.Spec.DBName
 		}
 

@@ -140,6 +140,21 @@ rules:
 - apiGroups:
   - rds.services.k8s.aws
   resources:
+  - dbclusters
+  verbs:
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - rds.services.k8s.aws
+  resources:
+  - dbclusters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - rds.services.k8s.aws
+  resources:
   - dbinstances
   verbs:
   - create

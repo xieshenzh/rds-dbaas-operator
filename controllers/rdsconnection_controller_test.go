@@ -667,7 +667,7 @@ var _ = Describe("RDSConnectionController", func() {
 				BeforeEach(assertResourceCreation(connection))
 				AfterEach(assertResourceDeletion(connection))
 
-				It("should add jdbc-url to the ConfigMap for service binding", func() {
+				It("should not add jdbc-url to the ConfigMap for service binding", func() {
 					By("checking the status of the Connection")
 					conn := &rdsdbaasv1alpha1.RDSConnection{
 						ObjectMeta: metav1.ObjectMeta{
@@ -699,9 +699,8 @@ var _ = Describe("RDSConnectionController", func() {
 					}
 					err := k8sClient.Get(ctx, client.ObjectKeyFromObject(configmap), configmap)
 					Expect(err).ShouldNot(HaveOccurred())
-					ju, juOk := configmap.Data["jdbc-url"]
-					Expect(juOk).Should(BeTrue())
-					Expect(ju).Should(Equal("jdbc:oracle:thin:@address-oracle-connection-controller:9000/ORCL"))
+					_, juOk := configmap.Data["jdbc-url"]
+					Expect(juOk).Should(BeFalse())
 					t, typeOk := configmap.Data["type"]
 					Expect(typeOk).Should(BeTrue())
 					Expect(t).Should(Equal("oracle"))
@@ -753,7 +752,7 @@ var _ = Describe("RDSConnectionController", func() {
 				BeforeEach(assertResourceCreation(connection))
 				AfterEach(assertResourceDeletion(connection))
 
-				It("should add jdbc-url to the ConfigMap for service binding", func() {
+				It("should not add jdbc-url to the ConfigMap for service binding", func() {
 					By("checking the status of the Connection")
 					conn := &rdsdbaasv1alpha1.RDSConnection{
 						ObjectMeta: metav1.ObjectMeta{
@@ -785,9 +784,8 @@ var _ = Describe("RDSConnectionController", func() {
 					}
 					err := k8sClient.Get(ctx, client.ObjectKeyFromObject(configmap), configmap)
 					Expect(err).ShouldNot(HaveOccurred())
-					ju, juOk := configmap.Data["jdbc-url"]
-					Expect(juOk).Should(BeTrue())
-					Expect(ju).Should(Equal("jdbc:sqlserver://address-sqlserver-connection-controller:9000;databaseName=master"))
+					_, juOk := configmap.Data["jdbc-url"]
+					Expect(juOk).Should(BeFalse())
 					t, typeOk := configmap.Data["type"]
 					Expect(typeOk).Should(BeTrue())
 					Expect(t).Should(Equal("sqlserver"))
