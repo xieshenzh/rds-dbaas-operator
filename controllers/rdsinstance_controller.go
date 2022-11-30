@@ -496,7 +496,20 @@ func (r *RDSInstanceReconciler) setDBInstanceSpec(ctx context.Context, dbInstanc
 		dbInstance.Spec.LicenseModel = pointer.String(licenseModel)
 	}
 
-	if _, e := setCredentials(ctx, r.Client, r.Scheme, dbInstance, rdsInstance.Namespace, rdsInstance, rdsInstance.Kind); e != nil {
+	if _, e := setCredentials(ctx, r.Client, r.Scheme, dbInstance.GetName(), rdsInstance.Namespace, rdsInstance, rdsInstance.Kind,
+		func(secretName string) {
+			if dbInstance.Spec.MasterUsername == nil {
+				dbInstance.Spec.MasterUsername = pointer.String(generateUsername(*dbInstance.Spec.Engine))
+			}
+
+			dbInstance.Spec.MasterUserPassword = &ackv1alpha1.SecretKeyReference{
+				SecretReference: v1.SecretReference{
+					Name:      secretName,
+					Namespace: rdsInstance.Namespace,
+				},
+				Key: "password",
+			}
+		}); e != nil {
 		return fmt.Errorf("failed to set credentials for DB instance")
 	}
 
@@ -506,11 +519,11 @@ func (r *RDSInstanceReconciler) setDBInstanceSpec(ctx context.Context, dbInstanc
 	return nil
 }
 
-func setCredentials(ctx context.Context, cli client.Client, scheme *runtime.Scheme, dbInstance *rdsv1alpha1.DBInstance,
-	namespace string, owner metav1.Object, kind string) (*v1.Secret, error) {
+func setCredentials(ctx context.Context, cli client.Client, scheme *runtime.Scheme, name string,
+	namespace string, owner metav1.Object, kind string, setSpec func(string)) (*v1.Secret, error) {
 	logger := log.FromContext(ctx)
 
-	secretName := fmt.Sprintf("%s-credentials", dbInstance.GetName())
+	secretName := fmt.Sprintf("%s-credentials", name)
 	secret := &v1.Secret{}
 	if e := cli.Get(ctx, client.ObjectKey{Namespace: namespace, Name: secretName}, secret); e != nil {
 		if errors.IsNotFound(e) {
@@ -550,17 +563,7 @@ func setCredentials(ctx context.Context, cli client.Client, scheme *runtime.Sche
 		}
 	}
 
-	if dbInstance.Spec.MasterUsername == nil {
-		dbInstance.Spec.MasterUsername = pointer.String(generateUsername(*dbInstance.Spec.Engine))
-	}
-
-	dbInstance.Spec.MasterUserPassword = &ackv1alpha1.SecretKeyReference{
-		SecretReference: v1.SecretReference{
-			Name:      secretName,
-			Namespace: namespace,
-		},
-		Key: "password",
-	}
+	setSpec(secretName)
 
 	return secret, nil
 }
@@ -657,14 +660,16 @@ func parseDBInstanceStatus(dbInstance *rdsv1alpha1.DBInstance) map[string]string
 	}
 	if dbInstance.Status.AssociatedRoles != nil {
 		for i, r := range dbInstance.Status.AssociatedRoles {
-			if r.FeatureName != nil {
-				instanceStatus[fmt.Sprintf("associatedRoles[%d].featureName", i)] = *r.FeatureName
-			}
-			if r.RoleARN != nil {
-				instanceStatus[fmt.Sprintf("associatedRoles[%d].roleARN", i)] = *r.RoleARN
-			}
-			if r.Status != nil {
-				instanceStatus[fmt.Sprintf("associatedRoles[%d].status", i)] = *r.Status
+			if r != nil {
+				if r.FeatureName != nil {
+					instanceStatus[fmt.Sprintf("associatedRoles[%d].featureName", i)] = *r.FeatureName
+				}
+				if r.RoleARN != nil {
+					instanceStatus[fmt.Sprintf("associatedRoles[%d].roleARN", i)] = *r.RoleARN
+				}
+				if r.Status != nil {
+					instanceStatus[fmt.Sprintf("associatedRoles[%d].status", i)] = *r.Status
+				}
 			}
 		}
 	}
@@ -685,7 +690,7 @@ func parseDBInstanceStatus(dbInstance *rdsv1alpha1.DBInstance) map[string]string
 	}
 	if dbInstance.Status.DBInstanceAutomatedBackupsReplications != nil {
 		for i, r := range dbInstance.Status.DBInstanceAutomatedBackupsReplications {
-			if r.DBInstanceAutomatedBackupsARN != nil {
+			if r != nil && r.DBInstanceAutomatedBackupsARN != nil {
 				instanceStatus[fmt.Sprintf("dbInstanceAutomatedBackupsReplications[%d].dbInstanceAutomatedBackupsARN", i)] = *r.DBInstanceAutomatedBackupsARN
 			}
 		}
@@ -695,11 +700,13 @@ func parseDBInstanceStatus(dbInstance *rdsv1alpha1.DBInstance) map[string]string
 	}
 	if dbInstance.Status.DBParameterGroups != nil {
 		for i, g := range dbInstance.Status.DBParameterGroups {
-			if g.DBParameterGroupName != nil {
-				instanceStatus[fmt.Sprintf("dbParameterGroups[%d].dbParameterGroupName", i)] = *g.DBParameterGroupName
-			}
-			if g.ParameterApplyStatus != nil {
-				instanceStatus[fmt.Sprintf("dbParameterGroups[%d].parameterApplyStatus", i)] = *g.ParameterApplyStatus
+			if g != nil {
+				if g.DBParameterGroupName != nil {
+					instanceStatus[fmt.Sprintf("dbParameterGroups[%d].dbParameterGroupName", i)] = *g.DBParameterGroupName
+				}
+				if g.ParameterApplyStatus != nil {
+					instanceStatus[fmt.Sprintf("dbParameterGroups[%d].parameterApplyStatus", i)] = *g.ParameterApplyStatus
+				}
 			}
 		}
 	}
@@ -718,21 +725,23 @@ func parseDBInstanceStatus(dbInstance *rdsv1alpha1.DBInstance) map[string]string
 		}
 		if dbInstance.Status.DBSubnetGroup.Subnets != nil {
 			for i, s := range dbInstance.Status.DBSubnetGroup.Subnets {
-				if s.SubnetAvailabilityZone != nil {
-					if s.SubnetAvailabilityZone.Name != nil {
-						instanceStatus[fmt.Sprintf("dbSubnetGroup.subnets[%d].subnetAvailabilityZone.name", i)] = *s.SubnetAvailabilityZone.Name
+				if s != nil {
+					if s.SubnetAvailabilityZone != nil {
+						if s.SubnetAvailabilityZone.Name != nil {
+							instanceStatus[fmt.Sprintf("dbSubnetGroup.subnets[%d].subnetAvailabilityZone.name", i)] = *s.SubnetAvailabilityZone.Name
+						}
 					}
-				}
-				if s.SubnetIdentifier != nil {
-					instanceStatus[fmt.Sprintf("dbSubnetGroup.subnets[%d].subnetIdentifier", i)] = *s.SubnetIdentifier
-				}
-				if s.SubnetOutpost != nil {
-					if s.SubnetOutpost.ARN != nil {
-						instanceStatus[fmt.Sprintf("dbSubnetGroup.subnets[%d].subnetOutpost.arn", i)] = *s.SubnetOutpost.ARN
+					if s.SubnetIdentifier != nil {
+						instanceStatus[fmt.Sprintf("dbSubnetGroup.subnets[%d].subnetIdentifier", i)] = *s.SubnetIdentifier
 					}
-				}
-				if s.SubnetStatus != nil {
-					instanceStatus[fmt.Sprintf("dbSubnetGroup.subnets[%d].subnetStatus", i)] = *s.SubnetStatus
+					if s.SubnetOutpost != nil {
+						if s.SubnetOutpost.ARN != nil {
+							instanceStatus[fmt.Sprintf("dbSubnetGroup.subnets[%d].subnetOutpost.arn", i)] = *s.SubnetOutpost.ARN
+						}
+					}
+					if s.SubnetStatus != nil {
+						instanceStatus[fmt.Sprintf("dbSubnetGroup.subnets[%d].subnetStatus", i)] = *s.SubnetStatus
+					}
 				}
 			}
 		}
@@ -748,17 +757,19 @@ func parseDBInstanceStatus(dbInstance *rdsv1alpha1.DBInstance) map[string]string
 	}
 	if dbInstance.Status.DomainMemberships != nil {
 		for i, m := range dbInstance.Status.DomainMemberships {
-			if m.Domain != nil {
-				instanceStatus[fmt.Sprintf("domainMemberships[%d].domain", i)] = *m.Domain
-			}
-			if m.FQDN != nil {
-				instanceStatus[fmt.Sprintf("domainMemberships[%d].fQDN", i)] = *m.FQDN
-			}
-			if m.IAMRoleName != nil {
-				instanceStatus[fmt.Sprintf("domainMemberships[%d].iamRoleName", i)] = *m.IAMRoleName
-			}
-			if m.Status != nil {
-				instanceStatus[fmt.Sprintf("domainMemberships[%d].status", i)] = *m.Status
+			if m != nil {
+				if m.Domain != nil {
+					instanceStatus[fmt.Sprintf("domainMemberships[%d].domain", i)] = *m.Domain
+				}
+				if m.FQDN != nil {
+					instanceStatus[fmt.Sprintf("domainMemberships[%d].fQDN", i)] = *m.FQDN
+				}
+				if m.IAMRoleName != nil {
+					instanceStatus[fmt.Sprintf("domainMemberships[%d].iamRoleName", i)] = *m.IAMRoleName
+				}
+				if m.Status != nil {
+					instanceStatus[fmt.Sprintf("domainMemberships[%d].status", i)] = *m.Status
+				}
 			}
 		}
 	}
@@ -805,11 +816,13 @@ func parseDBInstanceStatus(dbInstance *rdsv1alpha1.DBInstance) map[string]string
 	}
 	if dbInstance.Status.OptionGroupMemberships != nil {
 		for i, m := range dbInstance.Status.OptionGroupMemberships {
-			if m.OptionGroupName != nil {
-				instanceStatus[fmt.Sprintf("optionGroupMemberships[%d].optionGroupName", i)] = *m.OptionGroupName
-			}
-			if m.Status != nil {
-				instanceStatus[fmt.Sprintf("optionGroupMemberships[%d].status", i)] = *m.Status
+			if m != nil {
+				if m.OptionGroupName != nil {
+					instanceStatus[fmt.Sprintf("optionGroupMemberships[%d].optionGroupName", i)] = *m.OptionGroupName
+				}
+				if m.Status != nil {
+					instanceStatus[fmt.Sprintf("optionGroupMemberships[%d].status", i)] = *m.Status
+				}
 			}
 		}
 	}
@@ -874,11 +887,13 @@ func parseDBInstanceStatus(dbInstance *rdsv1alpha1.DBInstance) map[string]string
 		}
 		if dbInstance.Status.PendingModifiedValues.ProcessorFeatures != nil {
 			for i, f := range dbInstance.Status.PendingModifiedValues.ProcessorFeatures {
-				if f.Name != nil {
-					instanceStatus[fmt.Sprintf("pendingModifiedValues.ProcessorFeature[%d].name", i)] = *f.Name
-				}
-				if f.Value != nil {
-					instanceStatus[fmt.Sprintf("pendingModifiedValues.ProcessorFeature[%d].value", i)] = *f.Value
+				if f != nil {
+					if f.Name != nil {
+						instanceStatus[fmt.Sprintf("pendingModifiedValues.ProcessorFeature[%d].name", i)] = *f.Name
+					}
+					if f.Value != nil {
+						instanceStatus[fmt.Sprintf("pendingModifiedValues.ProcessorFeature[%d].value", i)] = *f.Value
+					}
 				}
 			}
 		}
@@ -914,27 +929,31 @@ func parseDBInstanceStatus(dbInstance *rdsv1alpha1.DBInstance) map[string]string
 	}
 	if dbInstance.Status.StatusInfos != nil {
 		for i, info := range dbInstance.Status.StatusInfos {
-			if info.Message != nil {
-				instanceStatus[fmt.Sprintf("statusInfos[%d].message", i)] = *info.Message
-			}
-			if info.Normal != nil {
-				instanceStatus[fmt.Sprintf("statusInfos[%d].normal", i)] = strconv.FormatBool(*info.Normal)
-			}
-			if info.Status != nil {
-				instanceStatus[fmt.Sprintf("statusInfos[%d].status", i)] = *info.Status
-			}
-			if info.StatusType != nil {
-				instanceStatus[fmt.Sprintf("statusInfos[%d].statusType", i)] = *info.StatusType
+			if info != nil {
+				if info.Message != nil {
+					instanceStatus[fmt.Sprintf("statusInfos[%d].message", i)] = *info.Message
+				}
+				if info.Normal != nil {
+					instanceStatus[fmt.Sprintf("statusInfos[%d].normal", i)] = strconv.FormatBool(*info.Normal)
+				}
+				if info.Status != nil {
+					instanceStatus[fmt.Sprintf("statusInfos[%d].status", i)] = *info.Status
+				}
+				if info.StatusType != nil {
+					instanceStatus[fmt.Sprintf("statusInfos[%d].statusType", i)] = *info.StatusType
+				}
 			}
 		}
 	}
 	if dbInstance.Status.VPCSecurityGroups != nil {
 		for i, g := range dbInstance.Status.VPCSecurityGroups {
-			if g.Status != nil {
-				instanceStatus[fmt.Sprintf("vpcSecurityGroups[%d].status", i)] = *g.Status
-			}
-			if g.VPCSecurityGroupID != nil {
-				instanceStatus[fmt.Sprintf("vpcSecurityGroups[%d].vpcSecurityGroupID", i)] = *g.VPCSecurityGroupID
+			if g != nil {
+				if g.Status != nil {
+					instanceStatus[fmt.Sprintf("vpcSecurityGroups[%d].status", i)] = *g.Status
+				}
+				if g.VPCSecurityGroupID != nil {
+					instanceStatus[fmt.Sprintf("vpcSecurityGroups[%d].vpcSecurityGroupID", i)] = *g.VPCSecurityGroupID
+				}
 			}
 		}
 	}

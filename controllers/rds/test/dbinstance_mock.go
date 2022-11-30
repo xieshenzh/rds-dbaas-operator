@@ -235,7 +235,7 @@ type mockDescribeDBInstancesPaginator struct {
 	counter                      int
 }
 
-func NewMockDescribeDBInstancesPaginator(accessKey, secretKey, region string) controllersrds.DescribeDBInstancesPaginatorAPI {
+func NewDescribeDBInstancesPaginator(accessKey, secretKey, region string) controllersrds.DescribeDBInstancesPaginatorAPI {
 	counter := 0
 	if strings.HasSuffix(accessKey, InventoryControllerTestAccessKeySuffix) {
 		counter = 3

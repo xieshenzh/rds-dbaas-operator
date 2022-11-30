@@ -188,9 +188,12 @@ var _ = BeforeSuite(func() {
 	inventoryReconciler := &controllers.RDSInventoryReconciler{
 		Client:                             mgr.GetClient(),
 		Scheme:                             mgr.GetScheme(),
-		GetDescribeDBInstancesPaginatorAPI: controllersrdstest.NewMockDescribeDBInstancesPaginator,
+		GetDescribeDBInstancesPaginatorAPI: controllersrdstest.NewDescribeDBInstancesPaginator,
 		GetModifyDBInstanceAPI:             controllersrdstest.NewModifyDBInstance,
 		GetDescribeDBInstancesAPI:          controllersrdstest.NewDescribeDBInstances,
+		GetDescribeDBClustersPaginatorAPI:  controllersrdstest.NewDescribeDBClustersPaginator,
+		GetModifyDBClusterAPI:              controllersrdstest.NewModifyDBCluster,
+		GetDescribeDBClustersAPI:           controllersrdstest.NewDescribeDBClusters,
 		ACKInstallNamespace:                testNamespace,
 		RDSCRDFilePath:                     filepath.Join("..", "rds", "config", "common", "bases"),
 		WaitForRDSControllerRetries:        10,
