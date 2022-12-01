@@ -842,14 +842,14 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return false, false
 	}
 
-	syncDBInstancesStatus := func() bool {
+	syncDBInstancesStatus := func() (bool, []dbaasv1alpha1.DatabaseService) {
 		awsDBInstanceIdentifiers := map[string]string{}
 		describeDBInstancesPaginator := r.GetDescribeDBInstancesPaginatorAPI(accessKey, secretKey, region)
 		for describeDBInstancesPaginator.HasMorePages() {
 			if output, e := describeDBInstancesPaginator.NextPage(ctx); e != nil {
 				logger.Error(e, "Failed to read DB Instances of the Inventory from AWS")
 				returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetInstancesError)
-				return true
+				return true, nil
 			} else if output != nil {
 				for _, instance := range output.DBInstances {
 					if instance.DBInstanceIdentifier != nil && instance.DBInstanceArn != nil {
@@ -863,10 +863,11 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if e := r.List(ctx, dbInstanceList, client.InNamespace(inventory.Namespace)); e != nil {
 			logger.Error(e, "Failed to read DB Instances of the Inventory in the cluster")
 			returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetInstancesError)
-			return true
+			return true, nil
 		}
 
 		var instances []dbaasv1alpha1.Instance
+		var services []dbaasv1alpha1.DatabaseService
 		for i := range dbInstanceList.Items {
 			dbInstance := dbInstanceList.Items[i]
 			if dbInstance.Spec.DBInstanceIdentifier == nil ||
@@ -888,21 +889,21 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				ServiceType: dbaasv1alpha1.InstanceDatabaseService,
 				ServiceInfo: parseDBInstanceStatus(&dbInstance),
 			}
-			inventory.Status.DatabaseServices = append(inventory.Status.DatabaseServices, service)
+			services = append(services, service)
 		}
 		inventory.Status.Instances = instances
 
-		return false
+		return false, services
 	}
 
-	syncDBClustersStatus := func() bool {
+	syncDBClustersStatus := func() (bool, []dbaasv1alpha1.DatabaseService) {
 		awsDBClusterIdentifiers := map[string]string{}
 		describeDBClustersPaginator := r.GetDescribeDBClustersPaginatorAPI(accessKey, secretKey, region)
 		for describeDBClustersPaginator.HasMorePages() {
 			if output, e := describeDBClustersPaginator.NextPage(ctx); e != nil {
 				logger.Error(e, "Failed to read DB Clusters of the Inventory from AWS")
 				returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetClustersError)
-				return true
+				return true, nil
 			} else if output != nil {
 				for _, cluster := range output.DBClusters {
 					if cluster.DBClusterIdentifier != nil && cluster.DBClusterArn != nil {
@@ -916,9 +917,10 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if e := r.List(ctx, dbClusterList, client.InNamespace(inventory.Namespace)); e != nil {
 			logger.Error(e, "Failed to read DB Clusters of the Inventory in the cluster")
 			returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetClustersError)
-			return true
+			return true, nil
 		}
 
+		var services []dbaasv1alpha1.DatabaseService
 		for i := range dbClusterList.Items {
 			dbCluster := dbClusterList.Items[i]
 			if dbCluster.Spec.DBClusterIdentifier == nil ||
@@ -934,10 +936,10 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				ServiceType: dbaasv1alpha1.ClusterDatabaseService,
 				ServiceInfo: parseDBClusterStatus(&dbCluster),
 			}
-			inventory.Status.DatabaseServices = append(inventory.Status.DatabaseServices, service)
+			services = append(services, service)
 		}
 
-		return false
+		return false, services
 	}
 
 	if err = r.Get(ctx, req.NamespacedName, &inventory); err != nil {
@@ -973,14 +975,20 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return
 	}
 
-	if syncDBClustersStatus() {
+	var services []dbaasv1alpha1.DatabaseService
+	if rt, sv := syncDBClustersStatus(); rt {
 		return
+	} else {
+		services = append(services, sv...)
 	}
 
-	if syncDBInstancesStatus() {
+	if rt, sv := syncDBInstancesStatus(); rt {
 		return
+	} else {
+		services = append(services, sv...)
 	}
 
+	inventory.Status.DatabaseServices = services
 	if e := r.Status().Update(ctx, &inventory); e != nil {
 		if errors.IsConflict(e) {
 			logger.Info("Inventory modified, retry reconciling")
@@ -1315,7 +1323,7 @@ func parseDBClusterStatus(dbCluster *rdsv1alpha1.DBCluster) map[string]string {
 					clusterStatus[fmt.Sprintf("dbClusterMembers[%d].isClusterWriter", i)] = strconv.FormatBool(*m.IsClusterWriter)
 				}
 				if m.PromotionTier != nil {
-					clusterStatus[fmt.Sprintf("dbClusterMembers[%d].promotionTier", i)] = strconv.FormatInt(*m.PromotionTier, 100)
+					clusterStatus[fmt.Sprintf("dbClusterMembers[%d].promotionTier", i)] = strconv.FormatInt(*m.PromotionTier, 10)
 				}
 			}
 		}
