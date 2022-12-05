@@ -62,7 +62,7 @@ metadata:
     containerImage: quay.io/ecosystem-appeng/rds-dbaas-operator:v0.3.0
     description: RHODA Provider Operator for Amazon RDS.
     operatorframework.io/suggested-namespace: openshift-dbaas-operator
-    operators.operatorframework.io/builder: operator-sdk-v1.25.0
+    operators.operatorframework.io/builder: operator-sdk-v1.25.2
     operators.operatorframework.io/internal-objects: '["rdsconnections.dbaas.redhat.com","rdsinstances.dbaas.redhat.com","rdsinventories.dbaas.redhat.com"]'
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
     repository: https://github.com/RHEcosystemAppEng/rds-dbaas-operator
@@ -228,6 +228,21 @@ spec:
           verbs:
           - get
           - patch
+          - update
+        - apiGroups:
+          - rds.services.k8s.aws
+          resources:
+          - dbclusters
+          verbs:
+          - get
+          - list
+          - update
+          - watch
+        - apiGroups:
+          - rds.services.k8s.aws
+          resources:
+          - dbclusters/finalizers
+          verbs:
           - update
         - apiGroups:
           - rds.services.k8s.aws

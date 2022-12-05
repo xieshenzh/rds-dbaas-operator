@@ -156,20 +156,22 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	checkDBServiceStatus := func() bool {
 		var serviceName *string
 		for _, ds := range inventory.Status.DatabaseServices {
-			if ds.ServiceType == connection.Spec.DatabaseServiceType &&
-				ds.ServiceID == connection.Spec.DatabaseServiceID {
-				serviceName = &ds.ServiceName
-				break
+			if ds.ServiceID == connection.Spec.DatabaseServiceID {
+				if (connection.Spec.DatabaseServiceType != nil && *ds.ServiceType == *connection.Spec.DatabaseServiceType) ||
+					(connection.Spec.DatabaseServiceType == nil && *ds.ServiceType == instanceType) {
+					serviceName = &ds.ServiceName
+					break
+				}
 			}
 		}
 		if serviceName == nil {
-			e := fmt.Errorf("database service %s type %s not found", connection.Spec.DatabaseServiceID, connection.Spec.DatabaseServiceType)
+			e := fmt.Errorf("database service %s type %v not found", connection.Spec.DatabaseServiceID, connection.Spec.DatabaseServiceType)
 			logger.Error(e, "DB Service not found from Inventory")
 			returnError(e, connectionStatusReasonNotFound, connectionStatusMessageServiceNotFound)
 			return true
 		}
 
-		if connection.Spec.DatabaseServiceType == dbaasv1alpha1.ClusterDatabaseService {
+		if connection.Spec.DatabaseServiceType != nil && *connection.Spec.DatabaseServiceType == clusterType {
 			dbService = &rdsv1alpha1.DBCluster{}
 		} else {
 			dbService = &rdsv1alpha1.DBInstance{}

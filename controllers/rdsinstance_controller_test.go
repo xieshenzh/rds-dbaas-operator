@@ -35,6 +35,7 @@ import (
 	"github.com/google/uuid"
 
 	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
+	dbaasv1beta1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1beta1"
 	rdsdbaasv1alpha1 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
 	"github.com/RHEcosystemAppEng/rds-dbaas-operator/controllers/rds/test"
 	rdsv1alpha1 "github.com/aws-controllers-k8s/rds-controller/apis/v1alpha1"
@@ -107,8 +108,8 @@ var _ = Describe("RDSInstanceController", func() {
 					Name:      inventoryName,
 					Namespace: testNamespace,
 				},
-				Spec: dbaasv1alpha1.DBaaSInventorySpec{
-					CredentialsRef: &dbaasv1alpha1.LocalObjectReference{
+				Spec: dbaasv1beta1.DBaaSInventorySpec{
+					CredentialsRef: &dbaasv1beta1.LocalObjectReference{
 						Name: credentialName,
 					},
 				},

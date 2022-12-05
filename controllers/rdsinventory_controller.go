@@ -46,6 +46,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
+	dbaasv1beta1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1beta1"
 	rdsdbaasv1alpha1 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
 	controllersrds "github.com/RHEcosystemAppEng/rds-dbaas-operator/controllers/rds"
 	rdsv1alpha1 "github.com/aws-controllers-k8s/rds-controller/apis/v1alpha1"
@@ -58,6 +59,9 @@ import (
 const (
 	rdsInventoryType = "RDSInventory.dbaas.redhat.com"
 	rdsClusterKind   = "DBCluster"
+
+	clusterType  = "cluster"
+	instanceType = "instance"
 
 	inventoryFinalizer = "rds.dbaas.redhat.com/inventory"
 
@@ -842,7 +846,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return false, false
 	}
 
-	syncDBInstancesStatus := func() (bool, []dbaasv1alpha1.DatabaseService) {
+	syncDBInstancesStatus := func() (bool, []dbaasv1beta1.DatabaseService) {
 		awsDBInstanceIdentifiers := map[string]string{}
 		describeDBInstancesPaginator := r.GetDescribeDBInstancesPaginatorAPI(accessKey, secretKey, region)
 		for describeDBInstancesPaginator.HasMorePages() {
@@ -866,8 +870,8 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return true, nil
 		}
 
-		var instances []dbaasv1alpha1.Instance
-		var services []dbaasv1alpha1.DatabaseService
+		serviceType := dbaasv1beta1.DatabaseServiceType(instanceType)
+		var services []dbaasv1beta1.DatabaseService
 		for i := range dbInstanceList.Items {
 			dbInstance := dbInstanceList.Items[i]
 			if dbInstance.Spec.DBInstanceIdentifier == nil ||
@@ -877,26 +881,19 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			if _, ok := awsDBInstanceIdentifiers[string(*dbInstance.Status.ACKResourceMetadata.ARN)]; !ok {
 				continue
 			}
-			instance := dbaasv1alpha1.Instance{
-				InstanceID:   *dbInstance.Spec.DBInstanceIdentifier,
-				Name:         dbInstance.Name,
-				InstanceInfo: parseDBInstanceStatus(&dbInstance),
-			}
-			instances = append(instances, instance)
-			service := dbaasv1alpha1.DatabaseService{
+			service := dbaasv1beta1.DatabaseService{
 				ServiceID:   *dbInstance.Spec.DBInstanceIdentifier,
 				ServiceName: dbInstance.Name,
-				ServiceType: dbaasv1alpha1.InstanceDatabaseService,
+				ServiceType: &serviceType,
 				ServiceInfo: parseDBInstanceStatus(&dbInstance),
 			}
 			services = append(services, service)
 		}
-		inventory.Status.Instances = instances
 
 		return false, services
 	}
 
-	syncDBClustersStatus := func() (bool, []dbaasv1alpha1.DatabaseService) {
+	syncDBClustersStatus := func() (bool, []dbaasv1beta1.DatabaseService) {
 		awsDBClusterIdentifiers := map[string]string{}
 		describeDBClustersPaginator := r.GetDescribeDBClustersPaginatorAPI(accessKey, secretKey, region)
 		for describeDBClustersPaginator.HasMorePages() {
@@ -920,7 +917,8 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return true, nil
 		}
 
-		var services []dbaasv1alpha1.DatabaseService
+		serviceType := dbaasv1beta1.DatabaseServiceType(clusterType)
+		var services []dbaasv1beta1.DatabaseService
 		for i := range dbClusterList.Items {
 			dbCluster := dbClusterList.Items[i]
 			if dbCluster.Spec.DBClusterIdentifier == nil ||
@@ -930,10 +928,10 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			if _, ok := awsDBClusterIdentifiers[string(*dbCluster.Status.ACKResourceMetadata.ARN)]; !ok {
 				continue
 			}
-			service := dbaasv1alpha1.DatabaseService{
+			service := dbaasv1beta1.DatabaseService{
 				ServiceID:   *dbCluster.Spec.DBClusterIdentifier,
 				ServiceName: dbCluster.Name,
-				ServiceType: dbaasv1alpha1.ClusterDatabaseService,
+				ServiceType: &serviceType,
 				ServiceInfo: parseDBClusterStatus(&dbCluster),
 			}
 			services = append(services, service)
@@ -975,7 +973,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return
 	}
 
-	var services []dbaasv1alpha1.DatabaseService
+	var services []dbaasv1beta1.DatabaseService
 	if rt, sv := syncDBClustersStatus(); rt {
 		return
 	} else {
