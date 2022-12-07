@@ -155,10 +155,21 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	checkDBServiceStatus := func() bool {
 		var serviceName *string
+		var cType string
+		if connection.Spec.DatabaseServiceType != nil {
+			cType = string(*connection.Spec.DatabaseServiceType)
+		} else {
+			cType = instanceType
+		}
 		for _, ds := range inventory.Status.DatabaseServices {
 			if ds.ServiceID == connection.Spec.DatabaseServiceID {
-				if (connection.Spec.DatabaseServiceType != nil && *ds.ServiceType == *connection.Spec.DatabaseServiceType) ||
-					(connection.Spec.DatabaseServiceType == nil && *ds.ServiceType == instanceType) {
+				var sType string
+				if ds.ServiceType != nil {
+					sType = string(*ds.ServiceType)
+				} else {
+					sType = instanceType
+				}
+				if cType == sType {
 					serviceName = &ds.ServiceName
 					break
 				}
