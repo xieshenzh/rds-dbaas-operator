@@ -27,7 +27,7 @@ import (
 	"k8s.io/utils/pointer"
 )
 
-var _ = Describe("DbUtils", func() {
+var _ = Describe("DBUtils", func() {
 	Context("Generate Username", func() {
 		DescribeTable("checking generateUsername",
 			func(engine string, username string) {
@@ -146,6 +146,39 @@ var _ = Describe("DbUtils", func() {
 			Entry("custom-sqlserver-ee", "custom-sqlserver-ee", pointer.String("master")),
 			Entry("custom-sqlserver-se", "custom-sqlserver-se", pointer.String("master")),
 			Entry("custom-sqlserver-web", "custom-sqlserver-web", pointer.String("master")),
+			Entry("Invalid", "invalid", nil),
+		)
+	})
+
+	Context("Generate Default DB Port", func() {
+		DescribeTable("checking getDefaultDBPort",
+			func(engine string, dbPort *int64) {
+				p := getDefaultDBPort(engine)
+				if dbPort == nil {
+					Expect(p).Should(BeNil())
+				} else {
+					Expect(*p).Should(Equal(*dbPort))
+				}
+			},
+
+			Entry("aurora", "aurora", pointer.Int64(3306)),
+			Entry("aurora-mysql", "aurora-mysql", pointer.Int64(3306)),
+			Entry("aurora-postgresql", "aurora-postgresql", pointer.Int64(5432)),
+			Entry("custom-oracle-ee", "custom-oracle-ee", pointer.Int64(1521)),
+			Entry("mariadb", "mariadb", pointer.Int64(3306)),
+			Entry("mysql", "mysql", pointer.Int64(3306)),
+			Entry("oracle-ee", "oracle-ee", pointer.Int64(1521)),
+			Entry("oracle-ee-cdb", "oracle-ee-cdb", pointer.Int64(1521)),
+			Entry("oracle-se2", "oracle-se2", pointer.Int64(1521)),
+			Entry("oracle-se2-cdb", "oracle-se2-cdb", pointer.Int64(1521)),
+			Entry("postgres", "postgres", pointer.Int64(5432)),
+			Entry("sqlserver-ee", "sqlserver-ee", pointer.Int64(1433)),
+			Entry("sqlserver-se", "sqlserver-se", pointer.Int64(1433)),
+			Entry("sqlserver-ex", "sqlserver-ex", pointer.Int64(1433)),
+			Entry("sqlserver-web", "sqlserver-web", pointer.Int64(1433)),
+			Entry("custom-sqlserver-ee", "custom-sqlserver-ee", pointer.Int64(1433)),
+			Entry("custom-sqlserver-se", "custom-sqlserver-se", pointer.Int64(1433)),
+			Entry("custom-sqlserver-web", "custom-sqlserver-web", pointer.Int64(1433)),
 			Entry("Invalid", "invalid", nil),
 		)
 	})

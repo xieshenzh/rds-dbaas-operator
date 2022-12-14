@@ -141,12 +141,14 @@ var inventoryTestDBInstances = []*rds.DescribeDBInstancesOutput{
 				DBInstanceStatus:     pointer.String("available"),
 				Engine:               pointer.String("mysql"),
 				DBInstanceArn:        pointer.String("mock-db-cluster-1"),
+				DBClusterIdentifier:  pointer.String("mock-db-cluster-1"),
 			},
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-cluster-2"),
 				DBInstanceStatus:     pointer.String("available"),
 				Engine:               pointer.String("postgres"),
 				DBInstanceArn:        pointer.String("mock-db-cluster-2"),
+				DBClusterIdentifier:  pointer.String("mock-db-cluster-2"),
 			},
 		},
 	},
@@ -238,7 +240,7 @@ type mockDescribeDBInstancesPaginator struct {
 func NewDescribeDBInstancesPaginator(accessKey, secretKey, region string) controllersrds.DescribeDBInstancesPaginatorAPI {
 	counter := 0
 	if strings.HasSuffix(accessKey, InventoryControllerTestAccessKeySuffix) {
-		counter = 3
+		counter = 5
 	} else if strings.HasSuffix(accessKey, ConnectionControllerTestAccessKeySuffix) {
 		counter = 1
 	}

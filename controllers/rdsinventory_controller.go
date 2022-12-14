@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -58,10 +57,6 @@ import (
 
 const (
 	rdsInventoryType = "RDSInventory.dbaas.redhat.com"
-	rdsClusterKind   = "DBCluster"
-
-	clusterType  = "cluster"
-	instanceType = "instance"
 
 	inventoryFinalizer = "rds.dbaas.redhat.com/inventory"
 
@@ -683,7 +678,6 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 					default:
 					}
 				}
-				//TODO
 				if dbCluster.Status != nil && *dbCluster.Status == "deleting" {
 					continue
 				}
@@ -963,12 +957,12 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return
 	}
 
-	rt, rq := adoptDBClusters()
+	rt, rqc := adoptDBClusters()
 	if rt {
 		return
 	}
 
-	rt, rq = adoptDBInstances()
+	rt, rqi := adoptDBInstances()
 	if rt {
 		return
 	}
@@ -998,7 +992,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return
 	}
 
-	if rq {
+	if rqi || rqc {
 		returnReadyRequeue()
 	} else {
 		returnReady()
@@ -1235,247 +1229,6 @@ func createAdoptedResource(resourceIdentifier *string, resourceArn *string, engi
 			},
 		},
 	}
-}
-
-func parseDBClusterStatus(dbCluster *rdsv1alpha1.DBCluster) map[string]string {
-	clusterStatus := map[string]string{}
-	if dbCluster.Spec.Engine != nil {
-		clusterStatus["engine"] = *dbCluster.Spec.Engine
-	}
-	if dbCluster.Spec.EngineVersion != nil {
-		clusterStatus["engineVersion"] = *dbCluster.Spec.EngineVersion
-	}
-	if dbCluster.Status.ACKResourceMetadata != nil {
-		if dbCluster.Status.ACKResourceMetadata.ARN != nil {
-			clusterStatus["ackResourceMetadata.arn"] = string(*dbCluster.Status.ACKResourceMetadata.ARN)
-		}
-		if dbCluster.Status.ACKResourceMetadata.OwnerAccountID != nil {
-			clusterStatus["ackResourceMetadata.ownerAccountID"] = string(*dbCluster.Status.ACKResourceMetadata.OwnerAccountID)
-		}
-		if dbCluster.Status.ACKResourceMetadata.Region != nil {
-			clusterStatus["ackResourceMetadata.region"] = string(*dbCluster.Status.ACKResourceMetadata.Region)
-		}
-	}
-	if dbCluster.Status.ActivityStreamKinesisStreamName != nil {
-		clusterStatus["activityStreamKinesisStreamName"] = *dbCluster.Status.ActivityStreamKinesisStreamName
-	}
-	if dbCluster.Status.ActivityStreamKMSKeyID != nil {
-		clusterStatus["activityStreamKMSKeyID"] = *dbCluster.Status.ActivityStreamKMSKeyID
-	}
-	if dbCluster.Status.ActivityStreamMode != nil {
-		clusterStatus["activityStreamMode"] = *dbCluster.Status.ActivityStreamMode
-	}
-	if dbCluster.Status.ActivityStreamStatus != nil {
-		clusterStatus["activityStreamStatus"] = *dbCluster.Status.ActivityStreamStatus
-	}
-	if dbCluster.Status.AssociatedRoles != nil {
-		for i, r := range dbCluster.Status.AssociatedRoles {
-			if r != nil {
-				if r.FeatureName != nil {
-					clusterStatus[fmt.Sprintf("associatedRoles[%d].featureName", i)] = *r.FeatureName
-				}
-				if r.RoleARN != nil {
-					clusterStatus[fmt.Sprintf("associatedRoles[%d].roleARN", i)] = *r.RoleARN
-				}
-				if r.Status != nil {
-					clusterStatus[fmt.Sprintf("associatedRoles[%d].status", i)] = *r.Status
-				}
-			}
-		}
-	}
-	if dbCluster.Status.AutomaticRestartTime != nil {
-		clusterStatus["automaticRestartTime"] = dbCluster.Status.AutomaticRestartTime.String()
-	}
-	if dbCluster.Status.BacktrackConsumedChangeRecords != nil {
-		clusterStatus["backtrackConsumedChangeRecords"] = strconv.FormatInt(*dbCluster.Status.BacktrackConsumedChangeRecords, 10)
-	}
-	if dbCluster.Status.Capacity != nil {
-		clusterStatus["capacity"] = strconv.FormatInt(*dbCluster.Status.Capacity, 10)
-	}
-	if dbCluster.Status.CloneGroupID != nil {
-		clusterStatus["cloneGroupID"] = *dbCluster.Status.CloneGroupID
-	}
-	if dbCluster.Status.ClusterCreateTime != nil {
-		clusterStatus["clusterCreateTime"] = dbCluster.Status.ClusterCreateTime.String()
-	}
-	if dbCluster.Status.CrossAccountClone != nil {
-		clusterStatus["crossAccountClone"] = strconv.FormatBool(*dbCluster.Status.CrossAccountClone)
-	}
-	if dbCluster.Status.CustomEndpoints != nil {
-		for i, e := range dbCluster.Status.CustomEndpoints {
-			if e != nil {
-				clusterStatus[fmt.Sprintf("customEndpoints[%d]", i)] = *e
-			}
-		}
-	}
-	if dbCluster.Status.DBClusterMembers != nil {
-		for i, m := range dbCluster.Status.DBClusterMembers {
-			if m != nil {
-				if m.DBClusterParameterGroupStatus != nil {
-					clusterStatus[fmt.Sprintf("dbClusterMembers[%d].dbClusterParameterGroupStatus", i)] = *m.DBClusterParameterGroupStatus
-				}
-				if m.DBInstanceIdentifier != nil {
-					clusterStatus[fmt.Sprintf("dbClusterMembers[%d].dbInstanceIdentifier", i)] = *m.DBInstanceIdentifier
-				}
-				if m.IsClusterWriter != nil {
-					clusterStatus[fmt.Sprintf("dbClusterMembers[%d].isClusterWriter", i)] = strconv.FormatBool(*m.IsClusterWriter)
-				}
-				if m.PromotionTier != nil {
-					clusterStatus[fmt.Sprintf("dbClusterMembers[%d].promotionTier", i)] = strconv.FormatInt(*m.PromotionTier, 10)
-				}
-			}
-		}
-	}
-	if dbCluster.Status.DBClusterOptionGroupMemberships != nil {
-		for i, m := range dbCluster.Status.DBClusterOptionGroupMemberships {
-			if m != nil {
-				if m.DBClusterOptionGroupName != nil {
-					clusterStatus[fmt.Sprintf("dbClusterOptionGroupMemberships[%d].dbClusterOptionGroupName", i)] = *m.DBClusterOptionGroupName
-				}
-				if m.Status != nil {
-					clusterStatus[fmt.Sprintf("dbClusterOptionGroupMemberships[%d].status", i)] = *m.Status
-				}
-			}
-		}
-	}
-	if dbCluster.Status.DBClusterParameterGroup != nil {
-		clusterStatus["dbClusterParameterGroup"] = *dbCluster.Status.DBClusterParameterGroup
-	}
-	if dbCluster.Status.DBSubnetGroup != nil {
-		clusterStatus["dbSubnetGroup"] = *dbCluster.Status.DBSubnetGroup
-	}
-	if dbCluster.Status.DBClusterResourceID != nil {
-		clusterStatus["dbClusterResourceID"] = *dbCluster.Status.DBClusterResourceID
-	}
-	if dbCluster.Status.DomainMemberships != nil {
-		for i, m := range dbCluster.Status.DomainMemberships {
-			if m != nil {
-				if m.Domain != nil {
-					clusterStatus[fmt.Sprintf("domainMemberships[%d].domain", i)] = *m.Domain
-				}
-				if m.FQDN != nil {
-					clusterStatus[fmt.Sprintf("domainMemberships[%d].fQDN", i)] = *m.FQDN
-				}
-				if m.IAMRoleName != nil {
-					clusterStatus[fmt.Sprintf("domainMemberships[%d].iamRoleName", i)] = *m.IAMRoleName
-				}
-				if m.Status != nil {
-					clusterStatus[fmt.Sprintf("domainMemberships[%d].status", i)] = *m.Status
-				}
-			}
-		}
-	}
-	if dbCluster.Status.EarliestBacktrackTime != nil {
-		clusterStatus["earliestBacktrackTime"] = dbCluster.Status.EarliestBacktrackTime.String()
-	}
-	if dbCluster.Status.EarliestRestorableTime != nil {
-		clusterStatus["earliestRestorableTime"] = dbCluster.Status.EarliestRestorableTime.String()
-	}
-	if dbCluster.Status.EnabledCloudwatchLogsExports != nil {
-		for i, e := range dbCluster.Status.EnabledCloudwatchLogsExports {
-			if e != nil {
-				clusterStatus[fmt.Sprintf("enabledCloudwatchLogsExports[%d]", i)] = *e
-			}
-		}
-	}
-	if dbCluster.Status.Endpoint != nil {
-		clusterStatus["endpoint"] = *dbCluster.Status.Endpoint
-	}
-	if dbCluster.Status.GlobalWriteForwardingRequested != nil {
-		clusterStatus["globalWriteForwardingRequested"] = strconv.FormatBool(*dbCluster.Status.GlobalWriteForwardingRequested)
-	}
-	if dbCluster.Status.GlobalWriteForwardingStatus != nil {
-		clusterStatus["globalWriteForwardingStatus"] = *dbCluster.Status.GlobalWriteForwardingStatus
-	}
-	if dbCluster.Status.HostedZoneID != nil {
-		clusterStatus["hostedZoneID"] = *dbCluster.Status.HostedZoneID
-	}
-	if dbCluster.Status.HTTPEndpointEnabled != nil {
-		clusterStatus["httpEndpointEnabled"] = strconv.FormatBool(*dbCluster.Status.HTTPEndpointEnabled)
-	}
-	if dbCluster.Status.IAMDatabaseAuthenticationEnabled != nil {
-		clusterStatus["iamDatabaseAuthenticationEnabled"] = strconv.FormatBool(*dbCluster.Status.IAMDatabaseAuthenticationEnabled)
-	}
-	if dbCluster.Status.LatestRestorableTime != nil {
-		clusterStatus["latestRestorableTime"] = dbCluster.Status.LatestRestorableTime.String()
-	}
-	if dbCluster.Status.MultiAZ != nil {
-		clusterStatus["multiAZ"] = strconv.FormatBool(*dbCluster.Status.MultiAZ)
-	}
-	if dbCluster.Status.PendingModifiedValues != nil {
-		if dbCluster.Status.PendingModifiedValues.DBClusterIdentifier != nil {
-			clusterStatus["pendingModifiedValues.dbClusterIdentifier"] = *dbCluster.Status.PendingModifiedValues.DBClusterIdentifier
-		}
-		if dbCluster.Status.PendingModifiedValues.EngineVersion != nil {
-			clusterStatus["pendingModifiedValues.engineVersion"] = *dbCluster.Status.PendingModifiedValues.EngineVersion
-		}
-		if dbCluster.Status.PendingModifiedValues.IAMDatabaseAuthenticationEnabled != nil {
-			clusterStatus["pendingModifiedValues.iamDatabaseAuthenticationEnabled"] = strconv.FormatBool(*dbCluster.Status.PendingModifiedValues.IAMDatabaseAuthenticationEnabled)
-		}
-		if dbCluster.Status.PendingModifiedValues.MasterUserPassword != nil {
-			clusterStatus["pendingModifiedValues.masterUserPassword"] = *dbCluster.Status.PendingModifiedValues.MasterUserPassword
-		}
-		if dbCluster.Status.PendingModifiedValues.PendingCloudwatchLogsExports != nil {
-			if dbCluster.Status.PendingModifiedValues.PendingCloudwatchLogsExports.LogTypesToDisable != nil {
-				for i, d := range dbCluster.Status.PendingModifiedValues.PendingCloudwatchLogsExports.LogTypesToDisable {
-					if d != nil {
-						clusterStatus[fmt.Sprintf("pendingModifiedValues.pendingCloudwatchLogsExports.logTypesToDisable[%d]", i)] = *d
-					}
-				}
-			}
-			if dbCluster.Status.PendingModifiedValues.PendingCloudwatchLogsExports.LogTypesToEnable != nil {
-				for i, e := range dbCluster.Status.PendingModifiedValues.PendingCloudwatchLogsExports.LogTypesToEnable {
-					if e != nil {
-						clusterStatus[fmt.Sprintf("pendingModifiedValues.pendingCloudwatchLogsExports.logTypesToEnable[%d]", i)] = *e
-					}
-				}
-			}
-		}
-	}
-	if dbCluster.Status.PercentProgress != nil {
-		clusterStatus["percentProgress"] = *dbCluster.Status.PercentProgress
-	}
-	if dbCluster.Status.PerformanceInsightsEnabled != nil {
-		clusterStatus["performanceInsightsEnabled"] = strconv.FormatBool(*dbCluster.Status.PerformanceInsightsEnabled)
-	}
-	if dbCluster.Status.ReadReplicaIdentifiers != nil {
-		for i, r := range dbCluster.Status.ReadReplicaIdentifiers {
-			if r != nil {
-				clusterStatus[fmt.Sprintf("readReplicaIdentifiers[%d]", i)] = *r
-			}
-		}
-	}
-	if dbCluster.Status.ReaderEndpoint != nil {
-		clusterStatus["readerEndpoint"] = *dbCluster.Status.ReaderEndpoint
-	}
-	if dbCluster.Status.Status != nil {
-		clusterStatus["status"] = *dbCluster.Status.Status
-	}
-	if dbCluster.Status.TagList != nil {
-		for i, t := range dbCluster.Status.TagList {
-			if t != nil {
-				if t.Key != nil {
-					clusterStatus[fmt.Sprintf("tagList[%d].key", i)] = *t.Key
-				}
-				if t.Value != nil {
-					clusterStatus[fmt.Sprintf("tagList[%d].value", i)] = *t.Value
-				}
-			}
-		}
-	}
-	if dbCluster.Status.VPCSecurityGroups != nil {
-		for i, g := range dbCluster.Status.VPCSecurityGroups {
-			if g != nil {
-				if g.Status != nil {
-					clusterStatus[fmt.Sprintf("vpcSecurityGroups[%d].status", i)] = *g.Status
-				}
-				if g.VPCSecurityGroupID != nil {
-					clusterStatus[fmt.Sprintf("vpcSecurityGroups[%d].vpcSecurityGroupID", i)] = *g.VPCSecurityGroupID
-				}
-			}
-		}
-	}
-	return clusterStatus
 }
 
 // SetupWithManager sets up the controller with the Manager.
