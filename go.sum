@@ -178,12 +178,12 @@ github.com/asaskevich/govalidator v0.0.0-20200428143746-21a406dcc535/go.mod h1:o
 github.com/asaskevich/govalidator v0.0.0-20200907205600-7a23bdc65eef/go.mod h1:WaHUgvxTVq04UNunO+XhnAqY/wQc+bxr74GqbsZ/Jqw=
 github.com/aws-controllers-k8s/ec2-controller v0.0.16/go.mod h1:ib1x1axY932YylqbnW8f4ltz7NNqCt38KoVZ6gwNWxw=
 github.com/aws-controllers-k8s/kms-controller v0.0.15/go.mod h1:EbxvdZDS2n3JCMmhfjhavSutzt/9J0jXSvGj2bufS68=
-github.com/aws-controllers-k8s/rds-controller v0.1.1 h1:uS0e4DUyTVGvbXxY6P2EKXl464I0CvVsZuzu6HdnwAs=
-github.com/aws-controllers-k8s/rds-controller v0.1.1/go.mod h1:IaAptN/IjzBY+q+ALm+xu2YQwtNPWNXJVeaYAphD93g=
+github.com/aws-controllers-k8s/rds-controller v0.1.2 h1:N5oz9yHWwh0XjldG/l+dN0awrtj9ae6VuTKcGZO6sM8=
+github.com/aws-controllers-k8s/rds-controller v0.1.2/go.mod h1:slIajcRHOL+h7fbwpcS/khjlJMy5ESNqU1/T705oE70=
 github.com/aws-controllers-k8s/runtime v0.18.4/go.mod h1:oA8ML1/LL3chPn26P6SzBNu1CUI2nekB+PTqykNs0qU=
 github.com/aws-controllers-k8s/runtime v0.19.2/go.mod h1:oA8ML1/LL3chPn26P6SzBNu1CUI2nekB+PTqykNs0qU=
-github.com/aws-controllers-k8s/runtime v0.20.1 h1:L/Huf1shRahx5BqJBCSS5u+vYg3f0Rotsq1jutORpdI=
-github.com/aws-controllers-k8s/runtime v0.20.1/go.mod h1:k7z4qlf6aK1Kzd4ff49wzcyhDKHjWaUpqxrwgl4uS1o=
+github.com/aws-controllers-k8s/runtime v0.21.0 h1:e9DK88QodwXMLz+QXPXk+8XNetVj4ij+puaVwn9uEVc=
+github.com/aws-controllers-k8s/runtime v0.21.0/go.mod h1:k7z4qlf6aK1Kzd4ff49wzcyhDKHjWaUpqxrwgl4uS1o=
 github.com/aws/aws-lambda-go v1.13.3/go.mod h1:4UKl9IzQMoD+QF79YdCuzCwp8VbmG4VAQwij/eHl5CU=
 github.com/aws/aws-sdk-go v1.15.11/go.mod h1:mFuSZ37Z9YOHbQEwBWztmVzqXrEkub65tZoCYDt7FT0=
 github.com/aws/aws-sdk-go v1.27.0/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
