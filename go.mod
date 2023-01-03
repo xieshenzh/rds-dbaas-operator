@@ -3,7 +3,7 @@ module github.com/RHEcosystemAppEng/rds-dbaas-operator
 go 1.17
 
 require (
-	github.com/RHEcosystemAppEng/dbaas-operator v1.0.1-0.20221013202612-d4fa9622d339
+	github.com/RHEcosystemAppEng/dbaas-operator v1.0.1-0.20230126205212-edff48ef45b3
 	github.com/aws-controllers-k8s/rds-controller v0.1.2
 	github.com/aws-controllers-k8s/runtime v0.21.0
 	github.com/aws/aws-sdk-go-v2 v1.16.16

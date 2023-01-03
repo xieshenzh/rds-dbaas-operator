@@ -41,7 +41,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
+	dbaasv1beta1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1beta1"
 	rdsdbaasv1alpha1 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
 	"github.com/RHEcosystemAppEng/rds-dbaas-operator/controllers"
 	controllersrdstest "github.com/RHEcosystemAppEng/rds-dbaas-operator/controllers/rds/test"
@@ -101,7 +101,7 @@ var _ = BeforeSuite(func() {
 	err = rdsdbaasv1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = dbaasv1alpha1.AddToScheme(scheme.Scheme)
+	err = dbaasv1beta1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = rdsv1alpha1.AddToScheme(scheme.Scheme)

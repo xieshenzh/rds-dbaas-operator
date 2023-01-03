@@ -34,7 +34,7 @@ import (
 
 	"github.com/google/uuid"
 
-	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
+	dbaasv1beta1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1beta1"
 	rdsdbaasv1alpha1 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
 	"github.com/RHEcosystemAppEng/rds-dbaas-operator/controllers/rds/test"
 	rdsv1alpha1 "github.com/aws-controllers-k8s/rds-controller/apis/v1alpha1"
@@ -52,26 +52,25 @@ var _ = Describe("RDSInstanceController", func() {
 				Name:      instanceName,
 				Namespace: testNamespace,
 			},
-			Spec: dbaasv1alpha1.DBaaSInstanceSpec{
-				InventoryRef: dbaasv1alpha1.NamespacedName{
+			Spec: dbaasv1beta1.DBaaSInstanceSpec{
+				InventoryRef: dbaasv1beta1.NamespacedName{
 					Name:      inventoryName,
 					Namespace: testNamespace,
 				},
-				Name:          instanceName,
-				CloudProvider: "AWS",
-				CloudRegion:   "us-east-1a",
-				OtherInstanceParams: map[string]string{
-					"Engine":              "postgres",
-					"DBInstanceClass":     "db.t3.micro",
-					"AllocatedStorage":    "20",
-					"EngineVersion":       "13.2",
-					"StorageType":         "gp2",
-					"IOPS":                "1000",
-					"MaxAllocatedStorage": "50",
-					"DBSubnetGroupName":   "default",
-					"PubliclyAccessible":  "false",
-					"VPCSecurityGroupIDs": "default",
-					"LicenseModel":        "license-included",
+				ProvisioningParameters: map[dbaasv1beta1.ProvisioningParameterType]string{
+					dbaasv1beta1.ProvisioningName:              instanceName,
+					dbaasv1beta1.ProvisioningAvailabilityZones: "us-east-1a",
+					dbaasv1beta1.ProvisioningDatabaseType:      "postgres",
+					dbaasv1beta1.ProvisioningMachineType:       "db.t3.micro",
+					dbaasv1beta1.ProvisioningStorageGib:        "20",
+					"EngineVersion":                            "13.2",
+					"StorageType":                              "gp2",
+					"IOPS":                                     "1000",
+					"MaxAllocatedStorage":                      "50",
+					"DBSubnetGroupName":                        "default",
+					"PubliclyAccessible":                       "false",
+					"VPCSecurityGroupIDs":                      "default",
+					"LicenseModel":                             "license-included",
 				},
 			},
 		}
@@ -107,8 +106,8 @@ var _ = Describe("RDSInstanceController", func() {
 					Name:      inventoryName,
 					Namespace: testNamespace,
 				},
-				Spec: dbaasv1alpha1.DBaaSInventorySpec{
-					CredentialsRef: &dbaasv1alpha1.LocalObjectReference{
+				Spec: dbaasv1beta1.DBaaSInventorySpec{
+					CredentialsRef: &dbaasv1beta1.LocalObjectReference{
 						Name: credentialName,
 					},
 				},
@@ -162,17 +161,16 @@ var _ = Describe("RDSInstanceController", func() {
 							Name:      instanceName + "-engine",
 							Namespace: testNamespace,
 						},
-						Spec: dbaasv1alpha1.DBaaSInstanceSpec{
-							InventoryRef: dbaasv1alpha1.NamespacedName{
+						Spec: dbaasv1beta1.DBaaSInstanceSpec{
+							InventoryRef: dbaasv1beta1.NamespacedName{
 								Name:      inventoryName,
 								Namespace: testNamespace,
 							},
-							Name:          instanceName + "-engine",
-							CloudProvider: "AWS",
-							CloudRegion:   "us-east-1a",
-							OtherInstanceParams: map[string]string{
-								"DBInstanceClass":  "db.t3.micro",
-								"AllocatedStorage": "20",
+							ProvisioningParameters: map[dbaasv1beta1.ProvisioningParameterType]string{
+								dbaasv1beta1.ProvisioningName:              instanceName,
+								dbaasv1beta1.ProvisioningAvailabilityZones: "us-east-1a",
+								dbaasv1beta1.ProvisioningMachineType:       "db.t3.micro",
+								dbaasv1beta1.ProvisioningStorageGib:        "20",
 							},
 						},
 					}
@@ -206,18 +204,16 @@ var _ = Describe("RDSInstanceController", func() {
 							Name:      instanceName + "-identifier",
 							Namespace: testNamespace,
 						},
-						Spec: dbaasv1alpha1.DBaaSInstanceSpec{
-							InventoryRef: dbaasv1alpha1.NamespacedName{
+						Spec: dbaasv1beta1.DBaaSInstanceSpec{
+							InventoryRef: dbaasv1beta1.NamespacedName{
 								Name:      inventoryName,
 								Namespace: testNamespace,
 							},
-							Name:          instanceName + "-identifier",
-							CloudProvider: "AWS",
-							CloudRegion:   "us-east-1a",
-							OtherInstanceParams: map[string]string{
-								"Engine":           "postgres",
-								"DBInstanceClass":  "db.t3.micro",
-								"AllocatedStorage": "20",
+							ProvisioningParameters: map[dbaasv1beta1.ProvisioningParameterType]string{
+								dbaasv1beta1.ProvisioningAvailabilityZones: "us-east-1a",
+								dbaasv1beta1.ProvisioningDatabaseType:      "postgres",
+								dbaasv1beta1.ProvisioningMachineType:       "db.t3.micro",
+								dbaasv1beta1.ProvisioningStorageGib:        "20",
 							},
 						},
 					}
@@ -250,23 +246,198 @@ var _ = Describe("RDSInstanceController", func() {
 					})
 				})
 
+				Context("when instance identifier starts not with letter", func() {
+					instanceIdentifier := &rdsdbaasv1alpha1.RDSInstance{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      instanceName + "-identifier-start-invalid",
+							Namespace: testNamespace,
+						},
+						Spec: dbaasv1beta1.DBaaSInstanceSpec{
+							InventoryRef: dbaasv1beta1.NamespacedName{
+								Name:      inventoryName,
+								Namespace: testNamespace,
+							},
+							ProvisioningParameters: map[dbaasv1beta1.ProvisioningParameterType]string{
+								dbaasv1beta1.ProvisioningName:              "0abcedfg",
+								dbaasv1beta1.ProvisioningAvailabilityZones: "us-east-1a",
+								dbaasv1beta1.ProvisioningDatabaseType:      "postgres",
+								dbaasv1beta1.ProvisioningMachineType:       "db.t3.micro",
+								dbaasv1beta1.ProvisioningStorageGib:        "20",
+							},
+						},
+					}
+					BeforeEach(assertResourceCreation(instanceIdentifier))
+					AfterEach(assertResourceDeletion(instanceIdentifier))
+
+					It("should make Instance in error status", func() {
+						ins := &rdsdbaasv1alpha1.RDSInstance{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      instanceName + "-identifier-start-invalid",
+								Namespace: testNamespace,
+							},
+						}
+						Eventually(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(ins), ins); err != nil {
+								return false
+							}
+							condition := apimeta.FindStatusCondition(ins.Status.Conditions, "ProvisionReady")
+							if condition == nil || condition.Status != metav1.ConditionFalse || condition.Reason != "InputError" ||
+								condition.Message != "Failed to create or update DB Instance: value of parameter DBInstanceIdentifier is invalid" {
+								return false
+							}
+							return true
+						}, timeout).Should(BeTrue())
+					})
+				})
+
+				Context("when instance identifier end not with dash", func() {
+					instanceIdentifier := &rdsdbaasv1alpha1.RDSInstance{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      instanceName + "-identifier-end-invalid",
+							Namespace: testNamespace,
+						},
+						Spec: dbaasv1beta1.DBaaSInstanceSpec{
+							InventoryRef: dbaasv1beta1.NamespacedName{
+								Name:      inventoryName,
+								Namespace: testNamespace,
+							},
+							ProvisioningParameters: map[dbaasv1beta1.ProvisioningParameterType]string{
+								dbaasv1beta1.ProvisioningName:              "abcedfg-",
+								dbaasv1beta1.ProvisioningAvailabilityZones: "us-east-1a",
+								dbaasv1beta1.ProvisioningDatabaseType:      "postgres",
+								dbaasv1beta1.ProvisioningMachineType:       "db.t3.micro",
+								dbaasv1beta1.ProvisioningStorageGib:        "20",
+							},
+						},
+					}
+					BeforeEach(assertResourceCreation(instanceIdentifier))
+					AfterEach(assertResourceDeletion(instanceIdentifier))
+
+					It("should make Instance in error status", func() {
+						ins := &rdsdbaasv1alpha1.RDSInstance{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      instanceName + "-identifier-end-invalid",
+								Namespace: testNamespace,
+							},
+						}
+						Eventually(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(ins), ins); err != nil {
+								return false
+							}
+							condition := apimeta.FindStatusCondition(ins.Status.Conditions, "ProvisionReady")
+							if condition == nil || condition.Status != metav1.ConditionFalse || condition.Reason != "InputError" ||
+								condition.Message != "Failed to create or update DB Instance: value of parameter DBInstanceIdentifier is invalid" {
+								return false
+							}
+							return true
+						}, timeout).Should(BeTrue())
+					})
+				})
+
+				Context("when instance identifier with two consecutive dash", func() {
+					instanceIdentifier := &rdsdbaasv1alpha1.RDSInstance{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      instanceName + "-identifier-dash-invalid",
+							Namespace: testNamespace,
+						},
+						Spec: dbaasv1beta1.DBaaSInstanceSpec{
+							InventoryRef: dbaasv1beta1.NamespacedName{
+								Name:      inventoryName,
+								Namespace: testNamespace,
+							},
+							ProvisioningParameters: map[dbaasv1beta1.ProvisioningParameterType]string{
+								dbaasv1beta1.ProvisioningName:              "abc--edfg",
+								dbaasv1beta1.ProvisioningAvailabilityZones: "us-east-1a",
+								dbaasv1beta1.ProvisioningDatabaseType:      "postgres",
+								dbaasv1beta1.ProvisioningMachineType:       "db.t3.micro",
+								dbaasv1beta1.ProvisioningStorageGib:        "20",
+							},
+						},
+					}
+					BeforeEach(assertResourceCreation(instanceIdentifier))
+					AfterEach(assertResourceDeletion(instanceIdentifier))
+
+					It("should make Instance in error status", func() {
+						ins := &rdsdbaasv1alpha1.RDSInstance{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      instanceName + "-identifier-dash-invalid",
+								Namespace: testNamespace,
+							},
+						}
+						Eventually(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(ins), ins); err != nil {
+								return false
+							}
+							condition := apimeta.FindStatusCondition(ins.Status.Conditions, "ProvisionReady")
+							if condition == nil || condition.Status != metav1.ConditionFalse || condition.Reason != "InputError" ||
+								condition.Message != "Failed to create or update DB Instance: value of parameter DBInstanceIdentifier is invalid" {
+								return false
+							}
+							return true
+						}, timeout).Should(BeTrue())
+					})
+				})
+
+				Context("when instance identifier too long", func() {
+					instanceIdentifier := &rdsdbaasv1alpha1.RDSInstance{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      instanceName + "-identifier-length-invalid",
+							Namespace: testNamespace,
+						},
+						Spec: dbaasv1beta1.DBaaSInstanceSpec{
+							InventoryRef: dbaasv1beta1.NamespacedName{
+								Name:      inventoryName,
+								Namespace: testNamespace,
+							},
+							ProvisioningParameters: map[dbaasv1beta1.ProvisioningParameterType]string{
+								dbaasv1beta1.ProvisioningName:              "abcedfghijklmnopqrstuvwxyz-0123456789-abcedfghijklmnopqrstuvwxyz-0123456789",
+								dbaasv1beta1.ProvisioningAvailabilityZones: "us-east-1a",
+								dbaasv1beta1.ProvisioningDatabaseType:      "postgres",
+								dbaasv1beta1.ProvisioningMachineType:       "db.t3.micro",
+								dbaasv1beta1.ProvisioningStorageGib:        "20",
+							},
+						},
+					}
+					BeforeEach(assertResourceCreation(instanceIdentifier))
+					AfterEach(assertResourceDeletion(instanceIdentifier))
+
+					It("should make Instance in error status", func() {
+						ins := &rdsdbaasv1alpha1.RDSInstance{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      instanceName + "-identifier-length-invalid",
+								Namespace: testNamespace,
+							},
+						}
+						Eventually(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(ins), ins); err != nil {
+								return false
+							}
+							condition := apimeta.FindStatusCondition(ins.Status.Conditions, "ProvisionReady")
+							if condition == nil || condition.Status != metav1.ConditionFalse || condition.Reason != "InputError" ||
+								condition.Message != "Failed to create or update DB Instance: value of parameter DBInstanceIdentifier is invalid" {
+								return false
+							}
+							return true
+						}, timeout).Should(BeTrue())
+					})
+				})
+
 				Context("when class is not set for the instance", func() {
 					instanceClass := &rdsdbaasv1alpha1.RDSInstance{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      instanceName + "-class",
 							Namespace: testNamespace,
 						},
-						Spec: dbaasv1alpha1.DBaaSInstanceSpec{
-							InventoryRef: dbaasv1alpha1.NamespacedName{
+						Spec: dbaasv1beta1.DBaaSInstanceSpec{
+							InventoryRef: dbaasv1beta1.NamespacedName{
 								Name:      inventoryName,
 								Namespace: testNamespace,
 							},
-							Name:          instanceName + "-class",
-							CloudProvider: "AWS",
-							CloudRegion:   "us-east-1a",
-							OtherInstanceParams: map[string]string{
-								"Engine":           "postgres",
-								"AllocatedStorage": "20",
+							ProvisioningParameters: map[dbaasv1beta1.ProvisioningParameterType]string{
+								dbaasv1beta1.ProvisioningName:              instanceName,
+								dbaasv1beta1.ProvisioningAvailabilityZones: "us-east-1a",
+								dbaasv1beta1.ProvisioningDatabaseType:      "postgres",
+								dbaasv1beta1.ProvisioningStorageGib:        "20",
 							},
 						},
 					}
@@ -301,17 +472,16 @@ var _ = Describe("RDSInstanceController", func() {
 							Name:      instanceName + "-storage",
 							Namespace: testNamespace,
 						},
-						Spec: dbaasv1alpha1.DBaaSInstanceSpec{
-							InventoryRef: dbaasv1alpha1.NamespacedName{
+						Spec: dbaasv1beta1.DBaaSInstanceSpec{
+							InventoryRef: dbaasv1beta1.NamespacedName{
 								Name:      inventoryName,
 								Namespace: testNamespace,
 							},
-							Name:          instanceName + "-storage",
-							CloudProvider: "AWS",
-							CloudRegion:   "us-east-1a",
-							OtherInstanceParams: map[string]string{
-								"Engine":          "postgres",
-								"DBInstanceClass": "db.t3.micro",
+							ProvisioningParameters: map[dbaasv1beta1.ProvisioningParameterType]string{
+								dbaasv1beta1.ProvisioningName:              instanceName,
+								dbaasv1beta1.ProvisioningAvailabilityZones: "us-east-1a",
+								dbaasv1beta1.ProvisioningDatabaseType:      "postgres",
+								dbaasv1beta1.ProvisioningMachineType:       "db.t3.micro",
 							},
 						},
 					}
@@ -346,18 +516,16 @@ var _ = Describe("RDSInstanceController", func() {
 							Name:      instanceName + "-region",
 							Namespace: testNamespace,
 						},
-						Spec: dbaasv1alpha1.DBaaSInstanceSpec{
-							InventoryRef: dbaasv1alpha1.NamespacedName{
+						Spec: dbaasv1beta1.DBaaSInstanceSpec{
+							InventoryRef: dbaasv1beta1.NamespacedName{
 								Name:      inventoryName,
 								Namespace: testNamespace,
 							},
-							Name:          instanceName + "-region",
-							CloudProvider: "AWS",
-							OtherInstanceParams: map[string]string{
-								"Engine":               "postgres",
-								"DBInstanceIdentifier": "rds-instance-instance-controller",
-								"DBInstanceClass":      "db.t3.micro",
-								"AllocatedStorage":     "20",
+							ProvisioningParameters: map[dbaasv1beta1.ProvisioningParameterType]string{
+								dbaasv1beta1.ProvisioningName:         instanceName,
+								dbaasv1beta1.ProvisioningDatabaseType: "postgres",
+								dbaasv1beta1.ProvisioningMachineType:  "db.t3.micro",
+								dbaasv1beta1.ProvisioningStorageGib:   "20",
 							},
 						},
 					}
@@ -403,10 +571,7 @@ var _ = Describe("RDSInstanceController", func() {
 								Expect(dbInstance.Spec.Engine).ShouldNot(BeNil())
 								Expect(*dbInstance.Spec.Engine).Should(Equal("postgres"))
 								Expect(dbInstance.Spec.DBInstanceIdentifier).ShouldNot(BeNil())
-								Expect(strings.HasPrefix(*dbInstance.Spec.DBInstanceIdentifier, "rhoda-postgres-")).Should(BeTrue())
-								id := strings.TrimPrefix(*dbInstance.Spec.DBInstanceIdentifier, "rhoda-postgres-")
-								_, err := uuid.Parse(id)
-								Expect(err).ShouldNot(HaveOccurred())
+								Expect(*dbInstance.Spec.DBInstanceIdentifier).Should(Equal(instanceName))
 								Expect(dbInstance.Spec.DBInstanceClass).ShouldNot(BeNil())
 								Expect(*dbInstance.Spec.DBInstanceClass).Should(Equal("db.t3.micro"))
 								Expect(dbInstance.Spec.AllocatedStorage).ShouldNot(BeNil())
@@ -482,19 +647,17 @@ var _ = Describe("RDSInstanceController", func() {
 								Name:      instanceName + "-delete",
 								Namespace: testNamespace,
 							},
-							Spec: dbaasv1alpha1.DBaaSInstanceSpec{
-								InventoryRef: dbaasv1alpha1.NamespacedName{
+							Spec: dbaasv1beta1.DBaaSInstanceSpec{
+								InventoryRef: dbaasv1beta1.NamespacedName{
 									Name:      inventoryName,
 									Namespace: testNamespace,
 								},
-								Name:          instanceName + "-delete",
-								CloudProvider: "AWS",
-								CloudRegion:   "us-east-1a",
-								OtherInstanceParams: map[string]string{
-									"Engine":               "postgres",
-									"DBInstanceIdentifier": "rds-instance-instance-controller",
-									"DBInstanceClass":      "db.t3.micro",
-									"AllocatedStorage":     "20",
+								ProvisioningParameters: map[dbaasv1beta1.ProvisioningParameterType]string{
+									dbaasv1beta1.ProvisioningName:              instanceName,
+									dbaasv1beta1.ProvisioningAvailabilityZones: "us-east-1a",
+									dbaasv1beta1.ProvisioningDatabaseType:      "postgres",
+									dbaasv1beta1.ProvisioningMachineType:       "db.t3.micro",
+									dbaasv1beta1.ProvisioningStorageGib:        "20",
 								},
 							},
 						}
@@ -530,7 +693,7 @@ var _ = Describe("RDSInstanceController", func() {
 
 					Context("when checking the status of the Instance", func() {
 						DescribeTable("checking handling DB instance status",
-							func(instanceStatus *string, phase dbaasv1alpha1.DBaasInstancePhase, cond, reason, message string) {
+							func(instanceStatus *string, phase dbaasv1beta1.DBaasInstancePhase, cond, reason, message string) {
 								dbInstance := &rdsv1alpha1.DBInstance{
 									ObjectMeta: metav1.ObjectMeta{
 										Name:      instanceName,
@@ -777,10 +940,7 @@ var _ = Describe("RDSInstanceController", func() {
 									Expect(condition4.Reason).Should(Equal("DBInstance"))
 									Expect(condition4.Message).Should(Equal("Reason: test##reason&&"))
 
-									Expect(strings.HasPrefix(ins.Status.InstanceID, "rhoda-postgres-")).Should(BeTrue())
-									id := strings.TrimPrefix(ins.Status.InstanceID, "rhoda-postgres-")
-									_, err := uuid.Parse(id)
-									Expect(err).ShouldNot(HaveOccurred())
+									Expect(ins.Status.InstanceID).Should(Equal(instanceName))
 
 									if ins.Status.InstanceInfo == nil || len(ins.Status.InstanceInfo) == 0 {
 										return false
@@ -876,35 +1036,35 @@ var _ = Describe("RDSInstanceController", func() {
 									return true
 								}, timeout).Should(BeTrue())
 							},
-							Entry("available", pointer.String("available"), dbaasv1alpha1.InstancePhaseReady, "True", "Ready", ""),
-							Entry("creating", pointer.String("creating"), dbaasv1alpha1.InstancePhaseCreating, "Unknown", "Updating", "Updating Instance"),
-							Entry("deleting", pointer.String("deleting"), dbaasv1alpha1.InstancePhaseDeleting, "Unknown", "Updating", "Updating Instance"),
-							Entry("failed", pointer.String("failed"), dbaasv1alpha1.InstancePhaseFailed, "False", "Terminated", "Failed"),
-							Entry("inaccessible-encryption-credentials-recoverable", pointer.String("inaccessible-encryption-credentials-recoverable"), dbaasv1alpha1.InstancePhaseError, "False", "BackendError", "Instance with error"),
-							Entry("incompatible-parameters", pointer.String("incompatible-parameters"), dbaasv1alpha1.InstancePhaseError, "False", "BackendError", "Instance with error"),
-							Entry("restore-error", pointer.String("restore-error"), dbaasv1alpha1.InstancePhaseError, "False", "BackendError", "Instance with error"),
-							Entry("backing-up", pointer.String("backing-up"), dbaasv1alpha1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
-							Entry("configuring-enhanced-monitoring", pointer.String("configuring-enhanced-monitoring"), dbaasv1alpha1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
-							Entry("configuring-iam-database-auth", pointer.String("configuring-iam-database-auth"), dbaasv1alpha1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
-							Entry("configuring-log-exports", pointer.String("configuring-log-exports"), dbaasv1alpha1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
-							Entry("converting-to-vpc", pointer.String("converting-to-vpc"), dbaasv1alpha1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
-							Entry("moving-to-vpc", pointer.String("moving-to-vpc"), dbaasv1alpha1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
-							Entry("rebooting", pointer.String("rebooting"), dbaasv1alpha1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
-							Entry("resetting-master-credentials", pointer.String("resetting-master-credentials"), dbaasv1alpha1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
-							Entry("renaming", pointer.String("renaming"), dbaasv1alpha1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
-							Entry("starting", pointer.String("starting"), dbaasv1alpha1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
-							Entry("stopping", pointer.String("stopping"), dbaasv1alpha1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
-							Entry("storage-optimization", pointer.String("storage-optimization"), dbaasv1alpha1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
-							Entry("upgrading", pointer.String("upgrading"), dbaasv1alpha1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
-							Entry("inaccessible-encryption-credentials", pointer.String("inaccessible-encryption-credentials"), dbaasv1alpha1.InstancePhaseUnknown, "False", "BackendError", "Instance with error"),
-							Entry("incompatible-network", pointer.String("incompatible-network"), dbaasv1alpha1.InstancePhaseUnknown, "False", "BackendError", "Instance with error"),
-							Entry("incompatible-option-group", pointer.String("incompatible-option-group"), dbaasv1alpha1.InstancePhaseUnknown, "False", "BackendError", "Instance with error"),
-							Entry("incompatible-restore", pointer.String("incompatible-restore"), dbaasv1alpha1.InstancePhaseUnknown, "False", "BackendError", "Instance with error"),
-							Entry("insufficient-capacity", pointer.String("insufficient-capacity"), dbaasv1alpha1.InstancePhaseUnknown, "False", "BackendError", "Instance with error"),
-							Entry("stopped", pointer.String("stopped"), dbaasv1alpha1.InstancePhaseUnknown, "False", "BackendError", "Instance with error"),
-							Entry("storage-full", pointer.String("storage-full"), dbaasv1alpha1.InstancePhaseUnknown, "False", "BackendError", "Instance with error"),
-							Entry("blank", pointer.String(""), dbaasv1alpha1.InstancePhaseUnknown, "False", "BackendError", "Instance with error"),
-							Entry("nil", nil, dbaasv1alpha1.InstancePhaseUnknown, "False", "BackendError", "Instance with error"),
+							Entry("available", pointer.String("available"), dbaasv1beta1.InstancePhaseReady, "True", "Ready", ""),
+							Entry("creating", pointer.String("creating"), dbaasv1beta1.InstancePhaseCreating, "Unknown", "Updating", "Updating Instance"),
+							Entry("deleting", pointer.String("deleting"), dbaasv1beta1.InstancePhaseDeleting, "Unknown", "Updating", "Updating Instance"),
+							Entry("failed", pointer.String("failed"), dbaasv1beta1.InstancePhaseFailed, "False", "Terminated", "Failed"),
+							Entry("inaccessible-encryption-credentials-recoverable", pointer.String("inaccessible-encryption-credentials-recoverable"), dbaasv1beta1.InstancePhaseError, "False", "BackendError", "Instance with error"),
+							Entry("incompatible-parameters", pointer.String("incompatible-parameters"), dbaasv1beta1.InstancePhaseError, "False", "BackendError", "Instance with error"),
+							Entry("restore-error", pointer.String("restore-error"), dbaasv1beta1.InstancePhaseError, "False", "BackendError", "Instance with error"),
+							Entry("backing-up", pointer.String("backing-up"), dbaasv1beta1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
+							Entry("configuring-enhanced-monitoring", pointer.String("configuring-enhanced-monitoring"), dbaasv1beta1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
+							Entry("configuring-iam-database-auth", pointer.String("configuring-iam-database-auth"), dbaasv1beta1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
+							Entry("configuring-log-exports", pointer.String("configuring-log-exports"), dbaasv1beta1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
+							Entry("converting-to-vpc", pointer.String("converting-to-vpc"), dbaasv1beta1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
+							Entry("moving-to-vpc", pointer.String("moving-to-vpc"), dbaasv1beta1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
+							Entry("rebooting", pointer.String("rebooting"), dbaasv1beta1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
+							Entry("resetting-master-credentials", pointer.String("resetting-master-credentials"), dbaasv1beta1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
+							Entry("renaming", pointer.String("renaming"), dbaasv1beta1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
+							Entry("starting", pointer.String("starting"), dbaasv1beta1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
+							Entry("stopping", pointer.String("stopping"), dbaasv1beta1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
+							Entry("storage-optimization", pointer.String("storage-optimization"), dbaasv1beta1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
+							Entry("upgrading", pointer.String("upgrading"), dbaasv1beta1.InstancePhaseUpdating, "Unknown", "Updating", "Updating Instance"),
+							Entry("inaccessible-encryption-credentials", pointer.String("inaccessible-encryption-credentials"), dbaasv1beta1.InstancePhaseUnknown, "False", "BackendError", "Instance with error"),
+							Entry("incompatible-network", pointer.String("incompatible-network"), dbaasv1beta1.InstancePhaseUnknown, "False", "BackendError", "Instance with error"),
+							Entry("incompatible-option-group", pointer.String("incompatible-option-group"), dbaasv1beta1.InstancePhaseUnknown, "False", "BackendError", "Instance with error"),
+							Entry("incompatible-restore", pointer.String("incompatible-restore"), dbaasv1beta1.InstancePhaseUnknown, "False", "BackendError", "Instance with error"),
+							Entry("insufficient-capacity", pointer.String("insufficient-capacity"), dbaasv1beta1.InstancePhaseUnknown, "False", "BackendError", "Instance with error"),
+							Entry("stopped", pointer.String("stopped"), dbaasv1beta1.InstancePhaseUnknown, "False", "BackendError", "Instance with error"),
+							Entry("storage-full", pointer.String("storage-full"), dbaasv1beta1.InstancePhaseUnknown, "False", "BackendError", "Instance with error"),
+							Entry("blank", pointer.String(""), dbaasv1beta1.InstancePhaseUnknown, "False", "BackendError", "Instance with error"),
+							Entry("nil", nil, dbaasv1beta1.InstancePhaseUnknown, "False", "BackendError", "Instance with error"),
 						)
 					})
 				})

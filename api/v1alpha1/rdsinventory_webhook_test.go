@@ -24,7 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
+	dbaasv1beta1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1beta1"
 	"github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
 )
 
@@ -37,8 +37,8 @@ var _ = Describe("RDSInventoryWebhook", func() {
 				Name:      rdsInventoryName,
 				Namespace: testNamespace,
 			},
-			Spec: dbaasv1alpha1.DBaaSInventorySpec{
-				CredentialsRef: &dbaasv1alpha1.LocalObjectReference{
+			Spec: dbaasv1beta1.DBaaSInventorySpec{
+				CredentialsRef: &dbaasv1beta1.LocalObjectReference{
 					Name: credentialsRefName,
 				},
 			},
@@ -79,8 +79,8 @@ var _ = Describe("RDSInventoryWebhook", func() {
 						Name:      rdsInventoryNotAllowedName,
 						Namespace: testNamespace,
 					},
-					Spec: dbaasv1alpha1.DBaaSInventorySpec{
-						CredentialsRef: &dbaasv1alpha1.LocalObjectReference{
+					Spec: dbaasv1beta1.DBaaSInventorySpec{
+						CredentialsRef: &dbaasv1beta1.LocalObjectReference{
 							Name: credentialsRefName,
 						},
 					},

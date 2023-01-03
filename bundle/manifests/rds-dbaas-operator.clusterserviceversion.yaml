@@ -27,18 +27,18 @@ metadata:
             "namespace": "rds-sample"
           },
           "spec": {
-            "cloudProvider": "AWS",
-            "cloudRegion": "us-east-1a",
             "inventoryRef": {
               "name": "rdsinventory-sample",
               "namespace": "rds-sample"
             },
-            "name": "rds-instance-sample",
-            "otherInstanceParams": {
-              "AllocatedStorage": "20",
-              "DBInstanceClass": "db.t3.micro",
-              "DBInstanceIdentifier": "rds-instance-sample",
-              "Engine": "postgres"
+            "provisioningParameters": {
+              "availabilityZones": "us-east-1a",
+              "cloudProvider": "AWS",
+              "databaseType": "postgres",
+              "machineType": "db.t3.micro",
+              "name": "rds-instance-sample",
+              "plan": "DEDICATED",
+              "storageGib": "20"
             }
           }
         },
@@ -62,7 +62,7 @@ metadata:
     containerImage: quay.io/ecosystem-appeng/rds-dbaas-operator:v0.3.0
     description: RHODA Provider Operator for Amazon RDS.
     operatorframework.io/suggested-namespace: openshift-dbaas-operator
-    operators.operatorframework.io/builder: operator-sdk-v1.19.0+git
+    operators.operatorframework.io/builder: operator-sdk-v1.25.2
     operators.operatorframework.io/internal-objects: '["rdsconnections.dbaas.redhat.com","rdsinstances.dbaas.redhat.com","rdsinventories.dbaas.redhat.com"]'
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
     repository: https://github.com/RHEcosystemAppEng/rds-dbaas-operator

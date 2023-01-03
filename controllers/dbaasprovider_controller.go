@@ -36,11 +36,12 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	dbaasoperator "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
+	dbaasoperator "github.com/RHEcosystemAppEng/dbaas-operator/api/v1beta1"
 )
 
 const (
@@ -110,200 +111,3277 @@ func (r *DBaaSProviderReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	// RDS controller registration custom resource isn't present,so create now with ClusterRole owner for GC
+	opts := &client.ListOptions{
+		LabelSelector: label.SelectorFromSet(map[string]string{
+			"olm.owner":      r.operatorNameVersion,
+			"olm.owner.kind": "ClusterServiceVersion",
+		}),
+	}
+	clusterRoleList := &rbac.ClusterRoleList{}
+	if err := r.List(context.Background(), clusterRoleList, opts); err != nil {
+		logger.Error(err, "unable to list ClusterRoles to seek potential operand owners")
+		return ctrl.Result{}, err
+	}
+
+	if len(clusterRoleList.Items) < 1 {
+		err := errors.NewNotFound(
+			schema.GroupResource{Group: "rbac.authorization.k8s.io", Resource: "ClusterRole"}, "potentialOwner")
+		logger.Error(err, "could not find ClusterRole owned by CSV to inherit operand")
+		return ctrl.Result{}, err
+	}
+
 	instance := &dbaasoperator.DBaaSProvider{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: providerCRName,
 		},
 	}
-	if err := r.Get(ctx, client.ObjectKeyFromObject(instance), instance); err != nil {
-		if errors.IsNotFound(err) {
-			// CR deleted since request queued, child objects getting GC'd, no requeue
-			logger.Info("resource not found, creating now")
-
-			// RDS controller registration custom resource isn't present,so create now with ClusterRole owner for GC
-			opts := &client.ListOptions{
-				LabelSelector: label.SelectorFromSet(map[string]string{
-					"olm.owner":      r.operatorNameVersion,
-					"olm.owner.kind": "ClusterServiceVersion",
-				}),
-			}
-			clusterRoleList := &rbac.ClusterRoleList{}
-			if err := r.List(context.Background(), clusterRoleList, opts); err != nil {
-				logger.Error(err, "unable to list ClusterRoles to seek potential operand owners")
-				return ctrl.Result{}, err
-			}
-
-			if len(clusterRoleList.Items) < 1 {
-				err := errors.NewNotFound(
-					schema.GroupResource{Group: "rbac.authorization.k8s.io", Resource: "ClusterRole"}, "potentialOwner")
-				logger.Error(err, "could not find ClusterRole owned by CSV to inherit operand")
-				return ctrl.Result{}, err
-			}
-
-			instance = bridgeProviderCR(clusterRoleList)
-			if err := r.Create(ctx, instance); err != nil {
-				logger.Error(err, "error while creating new cluster-scoped resource")
-				return ctrl.Result{}, err
-			} else {
-				logger.Info("cluster-scoped resource created")
-				return ctrl.Result{}, nil
-			}
-		}
-		// error fetching the resource, requeue and try again
-		logger.Error(err, "error fetching the resource")
+	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, instance, func() error {
+		bridgeProviderCR(instance, clusterRoleList)
+		return nil
+	})
+	if err != nil {
+		logger.Error(err, "error while creating or updating new cluster-scoped resource")
 		return ctrl.Result{}, err
 	}
+	logger.Info("cluster-scoped resource created or updated")
 
 	return ctrl.Result{}, nil
 }
 
 // bridgeProviderCR CR for RDS registration
-func bridgeProviderCR(clusterRoleList *rbac.ClusterRoleList) *dbaasoperator.DBaaSProvider {
-	instance := &dbaasoperator.DBaaSProvider{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: providerCRName,
-			OwnerReferences: []metav1.OwnerReference{
-				{
+func bridgeProviderCR(instance *dbaasoperator.DBaaSProvider, clusterRoleList *rbac.ClusterRoleList) {
+	instance.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
+		{
 
-					APIVersion:         "rbac.authorization.k8s.io/v1",
-					Kind:               "ClusterRole",
-					UID:                clusterRoleList.Items[0].GetUID(),
-					Name:               clusterRoleList.Items[0].Name,
-					Controller:         pointer.BoolPtr(true),
-					BlockOwnerDeletion: pointer.BoolPtr(false),
-				},
-			},
-			Labels: labels,
+			APIVersion:         "rbac.authorization.k8s.io/v1",
+			Kind:               "ClusterRole",
+			UID:                clusterRoleList.Items[0].GetUID(),
+			Name:               clusterRoleList.Items[0].Name,
+			Controller:         pointer.BoolPtr(true),
+			BlockOwnerDeletion: pointer.BoolPtr(false),
 		},
+	}
+	instance.ObjectMeta.Labels = labels
 
-		Spec: dbaasoperator.DBaaSProviderSpec{
-			Provider: dbaasoperator.DatabaseProvider{
-				Name:               provider,
-				DisplayName:        displayName,
-				DisplayDescription: displayDescription,
-				Icon: dbaasoperator.ProviderIcon{
-					Data:      iconData,
-					MediaType: mediaType,
+	instance.Spec = dbaasoperator.DBaaSProviderSpec{
+		Provider: dbaasoperator.DatabaseProviderInfo{
+			Name:               provider,
+			DisplayName:        displayName,
+			DisplayDescription: displayDescription,
+			Icon: dbaasoperator.ProviderIcon{
+				Data:      iconData,
+				MediaType: mediaType,
+			},
+		},
+		InventoryKind:  inventoryKind,
+		ConnectionKind: connectionKind,
+		InstanceKind:   instanceKind,
+		CredentialFields: []dbaasoperator.CredentialField{
+			{
+				Key:         awsAccessKeyID,
+				DisplayName: "AWS Access Key ID",
+				Type:        "maskedstring",
+				Required:    true,
+				HelpText:    awsAccessKeyIDHelpText,
+			},
+			{
+				Key:         awsSecretAccessKey,
+				DisplayName: "AWS Secret Access Key",
+				Type:        "maskedstring",
+				Required:    true,
+				HelpText:    awsSecretAccessKeyHelpText,
+			},
+			{
+				Key:         awsRegion,
+				DisplayName: "AWS Region",
+				Type:        "string",
+				Required:    true,
+				HelpText:    awsRegionHelpText,
+			},
+			{
+				Key:         ackResourceTags,
+				DisplayName: "ACK Resource Tags",
+				Type:        "string",
+				Required:    false,
+				HelpText:    ackResourceTagsHelpText,
+			},
+			{
+				Key:         ackLogLevel,
+				DisplayName: "ACK Log Level",
+				Type:        "string",
+				Required:    false,
+				HelpText:    ackLogLevelHelpText,
+			},
+		},
+		AllowsFreeTrial:              true,
+		ExternalProvisionURL:         provisionDocURL,
+		ExternalProvisionDescription: provisionDescription,
+		ProvisioningParameters: map[dbaasoperator.ProvisioningParameterType]dbaasoperator.ProvisioningParameter{
+			dbaasoperator.ProvisioningName: {
+				DisplayName: "DB instance identifier",
+				HelpText:    "The name of this instance in the database service.",
+			},
+			dbaasoperator.ProvisioningDatabaseType: {
+				DisplayName: "Engine type",
+				HelpText:    "Select the database engine type for the database instance.",
+				ConditionalData: []dbaasoperator.ConditionalProvisioningParameterData{
+					{
+						Options: []dbaasoperator.Option{
+							{
+								Value:        postgres,
+								DisplayValue: "PostgreSQL",
+							},
+							{
+								Value:        mysql,
+								DisplayValue: "MySQL",
+							},
+							{
+								Value:        mariadb,
+								DisplayValue: "MariaDB",
+							},
+							{
+								Value:        oracleSe2,
+								DisplayValue: "Oracle Standard Edition Two",
+							},
+							{
+								Value:        oracleSe2Cdb,
+								DisplayValue: "Oracle Standard Edition Two with Multitenant",
+							},
+							{
+								Value:        sqlserverEx,
+								DisplayValue: "SQL Server Express Edition",
+							},
+							{
+								Value:        sqlserverWeb,
+								DisplayValue: "SQL Server Web Edition",
+							},
+							{
+								Value:        sqlserverSe,
+								DisplayValue: "SQL Server Standard Edition",
+							},
+							{
+								Value:        sqlserverEe,
+								DisplayValue: "SQL Server Enterprise Edition",
+							},
+						},
+						DefaultValue: postgres,
+					},
 				},
 			},
-			InventoryKind:  inventoryKind,
-			ConnectionKind: connectionKind,
-			InstanceKind:   instanceKind,
-			CredentialFields: []dbaasoperator.CredentialField{
-				{
-					Key:         awsAccessKeyID,
-					DisplayName: "AWS Access Key ID",
-					Type:        "maskedstring",
-					Required:    true,
-					HelpText:    awsAccessKeyIDHelpText,
-				},
-				{
-					Key:         awsSecretAccessKey,
-					DisplayName: "AWS Secret Access Key",
-					Type:        "maskedstring",
-					Required:    true,
-					HelpText:    awsSecretAccessKeyHelpText,
-				},
-				{
-					Key:         awsRegion,
-					DisplayName: "AWS Region",
-					Type:        "string",
-					Required:    true,
-					HelpText:    awsRegionHelpText,
-				},
-				{
-					Key:         ackResourceTags,
-					DisplayName: "ACK Resource Tags",
-					Type:        "string",
-					Required:    false,
-					HelpText:    ackResourceTagsHelpText,
-				},
-				{
-					Key:         ackLogLevel,
-					DisplayName: "ACK Log Level",
-					Type:        "string",
-					Required:    false,
-					HelpText:    ackLogLevelHelpText,
+			dbaasoperator.ProvisioningMachineType: {
+				DisplayName: "DB instance class",
+				HelpText:    "The compute and memory capacity of the database instance.",
+				ConditionalData: []dbaasoperator.ConditionalProvisioningParameterData{
+					{
+						Dependencies: []dbaasoperator.FieldDependency{
+							{
+								Field: dbaasoperator.ProvisioningDatabaseType,
+								Value: postgres,
+							},
+						},
+						Options: []dbaasoperator.Option{
+							{
+								Value: "db.t3.micro",
+							},
+							{
+								Value: "db.t3.small",
+							},
+							{
+								Value: "db.t3.medium",
+							},
+							{
+								Value: "db.t3.large",
+							},
+							{
+								Value: "db.t3.xlarge",
+							},
+							{
+								Value: "db.t3.2xlarge",
+							},
+							{
+								Value: "db.t4g.micro",
+							},
+							{
+								Value: "db.t4g.small",
+							},
+							{
+								Value: "db.t4g.medium",
+							},
+							{
+								Value: "db.t4g.large",
+							},
+							{
+								Value: "db.t4g.xlarge",
+							},
+							{
+								Value: "db.t4g.2xlarge",
+							},
+							{
+								Value: "db.r5.large",
+							},
+							{
+								Value: "db.r5.xlarge",
+							},
+							{
+								Value: "db.r5.2xlarge",
+							},
+							{
+								Value: "db.r5.4xlarge",
+							},
+							{
+								Value: "db.r5.8xlarge",
+							},
+							{
+								Value: "db.r5.12xlarge",
+							},
+							{
+								Value: "db.r5.16xlarge",
+							},
+							{
+								Value: "db.r5.24xlarge",
+							},
+							{
+								Value: "db.r5b.large",
+							},
+							{
+								Value: "db.r5b.xlarge",
+							},
+							{
+								Value: "db.r5b.2xlarge",
+							},
+							{
+								Value: "db.r5b.4xlarge",
+							},
+							{
+								Value: "db.r5b.8xlarge",
+							},
+							{
+								Value: "db.r5b.12xlarge",
+							},
+							{
+								Value: "db.r5b.16xlarge",
+							},
+							{
+								Value: "db.r5b.24xlarge",
+							},
+							{
+								Value: "db.r5d.large",
+							},
+							{
+								Value: "db.r5d.xlarge",
+							},
+							{
+								Value: "db.r5d.2xlarge",
+							},
+							{
+								Value: "db.r5d.4xlarge",
+							},
+							{
+								Value: "db.r5d.8xlarge",
+							},
+							{
+								Value: "db.r5d.12xlarge",
+							},
+							{
+								Value: "db.r5d.16xlarge",
+							},
+							{
+								Value: "db.r5d.24xlarge",
+							},
+							{
+								Value: "db.r6i.large",
+							},
+							{
+								Value: "db.r6i.xlarge",
+							},
+							{
+								Value: "db.r6i.2xlarge",
+							},
+							{
+								Value: "db.r6i.4xlarge",
+							},
+							{
+								Value: "db.r6i.8xlarge",
+							},
+							{
+								Value: "db.r6i.12xlarge",
+							},
+							{
+								Value: "db.r6i.16xlarge",
+							},
+							{
+								Value: "db.r6i.24xlarge",
+							},
+							{
+								Value: "db.r6i.32xlarge",
+							},
+							{
+								Value: "db.r6gd.large",
+							},
+							{
+								Value: "db.r6gd.xlarge",
+							},
+							{
+								Value: "db.r6gd.2xlarge",
+							},
+							{
+								Value: "db.r6gd.4xlarge",
+							},
+							{
+								Value: "db.r6gd.8xlarge",
+							},
+							{
+								Value: "db.r6gd.12xlarge",
+							},
+							{
+								Value: "db.r6gd.16xlarge",
+							},
+							{
+								Value: "db.r6g.large",
+							},
+							{
+								Value: "db.r6g.xlarge",
+							},
+							{
+								Value: "db.r6g.2xlarge",
+							},
+							{
+								Value: "db.r6g.4xlarge",
+							},
+							{
+								Value: "db.r6g.8xlarge",
+							},
+							{
+								Value: "db.r6g.12xlarge",
+							},
+							{
+								Value: "db.r6g.16xlarge",
+							},
+							{
+								Value: "db.x2iedn.xlarge",
+							},
+							{
+								Value: "db.x2iedn.2xlarge",
+							},
+							{
+								Value: "db.x2iedn.4xlarge",
+							},
+							{
+								Value: "db.x2iedn.8xlarge",
+							},
+							{
+								Value: "db.x2iedn.16xlarge",
+							},
+							{
+								Value: "db.x2iedn.24xlarge",
+							},
+							{
+								Value: "db.x2iedn.32xlarge",
+							},
+							{
+								Value: "db.x2g.large",
+							},
+							{
+								Value: "db.x2g.xlarge",
+							},
+							{
+								Value: "db.x2g.2xlarge",
+							},
+							{
+								Value: "db.x2g.4xlarge",
+							},
+							{
+								Value: "db.x2g.8xlarge",
+							},
+							{
+								Value: "db.x2g.12xlarge",
+							},
+							{
+								Value: "db.x2g.16xlarge",
+							},
+							{
+								Value: "db.m5.large",
+							},
+							{
+								Value: "db.m5.xlarge",
+							},
+							{
+								Value: "db.m5.2xlarge",
+							},
+							{
+								Value: "db.m5.4xlarge",
+							},
+							{
+								Value: "db.m5.8xlarge",
+							},
+							{
+								Value: "db.m5.12xlarge",
+							},
+							{
+								Value: "db.m5.16xlarge",
+							},
+							{
+								Value: "db.m5.24xlarge",
+							},
+							{
+								Value: "db.m5d.large",
+							},
+							{
+								Value: "db.m5d.xlarge",
+							},
+							{
+								Value: "db.m5d.2xlarge",
+							},
+							{
+								Value: "db.m5d.4xlarge",
+							},
+							{
+								Value: "db.m5d.8xlarge",
+							},
+							{
+								Value: "db.m5d.12xlarge",
+							},
+							{
+								Value: "db.m5d.16xlarge",
+							},
+							{
+								Value: "db.m5d.24xlarge",
+							},
+							{
+								Value: "db.m6i.large",
+							},
+							{
+								Value: "db.m6i.xlarge",
+							},
+							{
+								Value: "db.m6i.2xlarge",
+							},
+							{
+								Value: "db.m6i.4xlarge",
+							},
+							{
+								Value: "db.m6i.8xlarge",
+							},
+							{
+								Value: "db.m6i.12xlarge",
+							},
+							{
+								Value: "db.m6i.16xlarge",
+							},
+							{
+								Value: "db.m6i.24xlarge",
+							},
+							{
+								Value: "db.m6i.32xlarge",
+							},
+							{
+								Value: "db.m6gd.large",
+							},
+							{
+								Value: "db.m6gd.xlarge",
+							},
+							{
+								Value: "db.m6gd.2xlarge",
+							},
+							{
+								Value: "db.m6gd.4xlarge",
+							},
+							{
+								Value: "db.m6gd.8xlarge",
+							},
+							{
+								Value: "db.m6gd.12xlarge",
+							},
+							{
+								Value: "db.m6gd.16xlarge",
+							},
+							{
+								Value: "db.m6g.large",
+							},
+							{
+								Value: "db.m6g.xlarge",
+							},
+							{
+								Value: "db.m6g.2xlarge",
+							},
+							{
+								Value: "db.m6g.4xlarge",
+							},
+							{
+								Value: "db.m6g.8xlarge",
+							},
+							{
+								Value: "db.m6g.12xlarge",
+							},
+							{
+								Value: "db.m6g.16xlarge",
+							},
+						},
+						DefaultValue: "db.t3.micro",
+					},
+					{
+						Dependencies: []dbaasoperator.FieldDependency{
+							{
+								Field: dbaasoperator.ProvisioningDatabaseType,
+								Value: mysql,
+							},
+						},
+						Options: []dbaasoperator.Option{
+							{
+								Value: "db.t2.micro",
+							},
+							{
+								Value: "db.t2.small",
+							},
+							{
+								Value: "db.t2.medium",
+							},
+							{
+								Value: "db.t2.large",
+							},
+							{
+								Value: "db.t2.xlarge",
+							},
+							{
+								Value: "db.t2.2xlarge",
+							},
+							{
+								Value: "db.t3.micro",
+							},
+							{
+								Value: "db.t3.small",
+							},
+							{
+								Value: "db.t3.medium",
+							},
+							{
+								Value: "db.t3.large",
+							},
+							{
+								Value: "db.t3.xlarge",
+							},
+							{
+								Value: "db.t3.2xlarge",
+							},
+							{
+								Value: "db.t4g.micro",
+							},
+							{
+								Value: "db.t4g.small",
+							},
+							{
+								Value: "db.t4g.medium",
+							},
+							{
+								Value: "db.t4g.large",
+							},
+							{
+								Value: "db.t4g.xlarge",
+							},
+							{
+								Value: "db.t4g.2xlarge",
+							},
+							{
+								Value: "db.r3.large",
+							},
+							{
+								Value: "db.r3.xlarge",
+							},
+							{
+								Value: "db.r3.2xlarge",
+							},
+							{
+								Value: "db.r3.4xlarge",
+							},
+							{
+								Value: "db.r3.8xlarge",
+							},
+							{
+								Value: "db.r4.large",
+							},
+							{
+								Value: "db.r4.xlarge",
+							},
+							{
+								Value: "db.r4.2xlarge",
+							},
+							{
+								Value: "db.r4.4xlarge",
+							},
+							{
+								Value: "db.r4.8xlarge",
+							},
+							{
+								Value: "db.r4.16xlarge",
+							},
+							{
+								Value: "db.r5.large",
+							},
+							{
+								Value: "db.r5.xlarge",
+							},
+							{
+								Value: "db.r5.2xlarge",
+							},
+							{
+								Value: "db.r5.4xlarge",
+							},
+							{
+								Value: "db.r5.8xlarge",
+							},
+							{
+								Value: "db.r5.12xlarge",
+							},
+							{
+								Value: "db.r5.16xlarge",
+							},
+							{
+								Value: "db.r5.24xlarge",
+							},
+							{
+								Value: "db.r5b.large",
+							},
+							{
+								Value: "db.r5b.xlarge",
+							},
+							{
+								Value: "db.r5b.2xlarge",
+							},
+							{
+								Value: "db.r5b.4xlarge",
+							},
+							{
+								Value: "db.r5b.8xlarge",
+							},
+							{
+								Value: "db.r5b.12xlarge",
+							},
+							{
+								Value: "db.r5b.16xlarge",
+							},
+							{
+								Value: "db.r5b.24xlarge",
+							},
+							{
+								Value: "db.r5d.large",
+							},
+							{
+								Value: "db.r5d.xlarge",
+							},
+							{
+								Value: "db.r5d.2xlarge",
+							},
+							{
+								Value: "db.r5d.4xlarge",
+							},
+							{
+								Value: "db.r5d.8xlarge",
+							},
+							{
+								Value: "db.r5d.12xlarge",
+							},
+							{
+								Value: "db.r5d.16xlarge",
+							},
+							{
+								Value: "db.r5d.24xlarge",
+							},
+							{
+								Value: "db.r6i.large",
+							},
+							{
+								Value: "db.r6i.xlarge",
+							},
+							{
+								Value: "db.r6i.2xlarge",
+							},
+							{
+								Value: "db.r6i.4xlarge",
+							},
+							{
+								Value: "db.r6i.8xlarge",
+							},
+							{
+								Value: "db.r6i.12xlarge",
+							},
+							{
+								Value: "db.r6i.16xlarge",
+							},
+							{
+								Value: "db.r6i.24xlarge",
+							},
+							{
+								Value: "db.r6i.32xlarge",
+							},
+							{
+								Value: "db.r6gd.large",
+							},
+							{
+								Value: "db.r6gd.xlarge",
+							},
+							{
+								Value: "db.r6gd.2xlarge",
+							},
+							{
+								Value: "db.r6gd.4xlarge",
+							},
+							{
+								Value: "db.r6gd.8xlarge",
+							},
+							{
+								Value: "db.r6gd.12xlarge",
+							},
+							{
+								Value: "db.r6gd.16xlarge",
+							},
+							{
+								Value: "db.r6g.large",
+							},
+							{
+								Value: "db.r6g.xlarge",
+							},
+							{
+								Value: "db.r6g.2xlarge",
+							},
+							{
+								Value: "db.r6g.4xlarge",
+							},
+							{
+								Value: "db.r6g.8xlarge",
+							},
+							{
+								Value: "db.r6g.12xlarge",
+							},
+							{
+								Value: "db.r6g.16xlarge",
+							},
+							{
+								Value: "db.x2iedn.xlarge",
+							},
+							{
+								Value: "db.x2iedn.2xlarge",
+							},
+							{
+								Value: "db.x2iedn.4xlarge",
+							},
+							{
+								Value: "db.x2iedn.8xlarge",
+							},
+							{
+								Value: "db.x2iedn.16xlarge",
+							},
+							{
+								Value: "db.x2iedn.24xlarge",
+							},
+							{
+								Value: "db.x2iedn.32xlarge",
+							},
+							{
+								Value: "db.x2g.large",
+							},
+							{
+								Value: "db.x2g.xlarge",
+							},
+							{
+								Value: "db.x2g.2xlarge",
+							},
+							{
+								Value: "db.x2g.4xlarge",
+							},
+							{
+								Value: "db.x2g.8xlarge",
+							},
+							{
+								Value: "db.x2g.12xlarge",
+							},
+							{
+								Value: "db.x2g.16xlarge",
+							},
+							{
+								Value: "db.m3.medium",
+							},
+							{
+								Value: "db.m3.large",
+							},
+							{
+								Value: "db.m3.xlarge",
+							},
+							{
+								Value: "db.m3.2xlarge",
+							},
+							{
+								Value: "db.m4.large",
+							},
+							{
+								Value: "db.m4.xlarge",
+							},
+							{
+								Value: "db.m4.2xlarge",
+							},
+							{
+								Value: "db.m4.4xlarge",
+							},
+							{
+								Value: "db.m4.10xlarge",
+							},
+							{
+								Value: "db.m4.16xlarge",
+							},
+							{
+								Value: "db.m5.large",
+							},
+							{
+								Value: "db.m5.xlarge",
+							},
+							{
+								Value: "db.m5.2xlarge",
+							},
+							{
+								Value: "db.m5.4xlarge",
+							},
+							{
+								Value: "db.m5.8xlarge",
+							},
+							{
+								Value: "db.m5.12xlarge",
+							},
+							{
+								Value: "db.m5.16xlarge",
+							},
+							{
+								Value: "db.m5.24xlarge",
+							},
+							{
+								Value: "db.m5d.large",
+							},
+							{
+								Value: "db.m5d.xlarge",
+							},
+							{
+								Value: "db.m5d.2xlarge",
+							},
+							{
+								Value: "db.m5d.4xlarge",
+							},
+							{
+								Value: "db.m5d.8xlarge",
+							},
+							{
+								Value: "db.m5d.12xlarge",
+							},
+							{
+								Value: "db.m5d.16xlarge",
+							},
+							{
+								Value: "db.m5d.24xlarge",
+							},
+							{
+								Value: "db.m6i.large",
+							},
+							{
+								Value: "db.m6i.xlarge",
+							},
+							{
+								Value: "db.m6i.2xlarge",
+							},
+							{
+								Value: "db.m6i.4xlarge",
+							},
+							{
+								Value: "db.m6i.8xlarge",
+							},
+							{
+								Value: "db.m6i.12xlarge",
+							},
+							{
+								Value: "db.m6i.16xlarge",
+							},
+							{
+								Value: "db.m6i.24xlarge",
+							},
+							{
+								Value: "db.m6i.32xlarge",
+							},
+							{
+								Value: "db.m6gd.large",
+							},
+							{
+								Value: "db.m6gd.xlarge",
+							},
+							{
+								Value: "db.m6gd.2xlarge",
+							},
+							{
+								Value: "db.m6gd.4xlarge",
+							},
+							{
+								Value: "db.m6gd.8xlarge",
+							},
+							{
+								Value: "db.m6gd.12xlarge",
+							},
+							{
+								Value: "db.m6gd.16xlarge",
+							},
+							{
+								Value: "db.m6g.large",
+							},
+							{
+								Value: "db.m6g.xlarge",
+							},
+							{
+								Value: "db.m6g.2xlarge",
+							},
+							{
+								Value: "db.m6g.4xlarge",
+							},
+							{
+								Value: "db.m6g.8xlarge",
+							},
+							{
+								Value: "db.m6g.12xlarge",
+							},
+							{
+								Value: "db.m6g.16xlarge",
+							},
+						},
+						DefaultValue: "db.t3.micro",
+					},
+					{
+						Dependencies: []dbaasoperator.FieldDependency{
+							{
+								Field: dbaasoperator.ProvisioningDatabaseType,
+								Value: mariadb,
+							},
+						},
+						Options: []dbaasoperator.Option{
+							{
+								Value: "db.t2.micro",
+							},
+							{
+								Value: "db.t2.small",
+							},
+							{
+								Value: "db.t2.medium",
+							},
+							{
+								Value: "db.t2.large",
+							},
+							{
+								Value: "db.t2.xlarge",
+							},
+							{
+								Value: "db.t2.2xlarge",
+							},
+							{
+								Value: "db.t3.micro",
+							},
+							{
+								Value: "db.t3.small",
+							},
+							{
+								Value: "db.t3.medium",
+							},
+							{
+								Value: "db.t3.large",
+							},
+							{
+								Value: "db.t3.xlarge",
+							},
+							{
+								Value: "db.t3.2xlarge",
+							},
+							{
+								Value: "db.t4g.micro",
+							},
+							{
+								Value: "db.t4g.small",
+							},
+							{
+								Value: "db.t4g.medium",
+							},
+							{
+								Value: "db.t4g.large",
+							},
+							{
+								Value: "db.t4g.xlarge",
+							},
+							{
+								Value: "db.t4g.2xlarge",
+							},
+							{
+								Value: "db.r3.large",
+							},
+							{
+								Value: "db.r3.xlarge",
+							},
+							{
+								Value: "db.r3.2xlarge",
+							},
+							{
+								Value: "db.r3.4xlarge",
+							},
+							{
+								Value: "db.r3.8xlarge",
+							},
+							{
+								Value: "db.r4.large",
+							},
+							{
+								Value: "db.r4.xlarge",
+							},
+							{
+								Value: "db.r4.2xlarge",
+							},
+							{
+								Value: "db.r4.4xlarge",
+							},
+							{
+								Value: "db.r4.8xlarge",
+							},
+							{
+								Value: "db.r4.16xlarge",
+							},
+							{
+								Value: "db.r5.large",
+							},
+							{
+								Value: "db.r5.xlarge",
+							},
+							{
+								Value: "db.r5.2xlarge",
+							},
+							{
+								Value: "db.r5.4xlarge",
+							},
+							{
+								Value: "db.r5.8xlarge",
+							},
+							{
+								Value: "db.r5.12xlarge",
+							},
+							{
+								Value: "db.r5.16xlarge",
+							},
+							{
+								Value: "db.r5.24xlarge",
+							},
+							{
+								Value: "db.r5b.large",
+							},
+							{
+								Value: "db.r5b.xlarge",
+							},
+							{
+								Value: "db.r5b.2xlarge",
+							},
+							{
+								Value: "db.r5b.4xlarge",
+							},
+							{
+								Value: "db.r5b.8xlarge",
+							},
+							{
+								Value: "db.r5b.12xlarge",
+							},
+							{
+								Value: "db.r5b.16xlarge",
+							},
+							{
+								Value: "db.r5b.24xlarge",
+							},
+							{
+								Value: "db.r6i.large",
+							},
+							{
+								Value: "db.r6i.xlarge",
+							},
+							{
+								Value: "db.r6i.2xlarge",
+							},
+							{
+								Value: "db.r6i.4xlarge",
+							},
+							{
+								Value: "db.r6i.8xlarge",
+							},
+							{
+								Value: "db.r6i.12xlarge",
+							},
+							{
+								Value: "db.r6i.16xlarge",
+							},
+							{
+								Value: "db.r6i.24xlarge",
+							},
+							{
+								Value: "db.r6i.32xlarge",
+							},
+							{
+								Value: "db.r6g.large",
+							},
+							{
+								Value: "db.r6g.xlarge",
+							},
+							{
+								Value: "db.r6g.2xlarge",
+							},
+							{
+								Value: "db.r6g.4xlarge",
+							},
+							{
+								Value: "db.r6g.8xlarge",
+							},
+							{
+								Value: "db.r6g.12xlarge",
+							},
+							{
+								Value: "db.r6g.16xlarge",
+							},
+							{
+								Value: "db.x2g.large",
+							},
+							{
+								Value: "db.x2g.xlarge",
+							},
+							{
+								Value: "db.x2g.2xlarge",
+							},
+							{
+								Value: "db.x2g.4xlarge",
+							},
+							{
+								Value: "db.x2g.8xlarge",
+							},
+							{
+								Value: "db.x2g.12xlarge",
+							},
+							{
+								Value: "db.x2g.16xlarge",
+							},
+							{
+								Value: "db.m4.large",
+							},
+							{
+								Value: "db.m4.xlarge",
+							},
+							{
+								Value: "db.m4.2xlarge",
+							},
+							{
+								Value: "db.m4.4xlarge",
+							},
+							{
+								Value: "db.m4.10xlarge",
+							},
+							{
+								Value: "db.m4.16xlarge",
+							},
+							{
+								Value: "db.m5.large",
+							},
+							{
+								Value: "db.m5.xlarge",
+							},
+							{
+								Value: "db.m5.2xlarge",
+							},
+							{
+								Value: "db.m5.4xlarge",
+							},
+							{
+								Value: "db.m5.8xlarge",
+							},
+							{
+								Value: "db.m5.12xlarge",
+							},
+							{
+								Value: "db.m5.16xlarge",
+							},
+							{
+								Value: "db.m5.24xlarge",
+							},
+							{
+								Value: "db.m6i.large",
+							},
+							{
+								Value: "db.m6i.xlarge",
+							},
+							{
+								Value: "db.m6i.2xlarge",
+							},
+							{
+								Value: "db.m6i.4xlarge",
+							},
+							{
+								Value: "db.m6i.8xlarge",
+							},
+							{
+								Value: "db.m6i.12xlarge",
+							},
+							{
+								Value: "db.m6i.16xlarge",
+							},
+							{
+								Value: "db.m6i.24xlarge",
+							},
+							{
+								Value: "db.m6i.32xlarge",
+							},
+							{
+								Value: "db.m6g.large",
+							},
+							{
+								Value: "db.m6g.xlarge",
+							},
+							{
+								Value: "db.m6g.2xlarge",
+							},
+							{
+								Value: "db.m6g.4xlarge",
+							},
+							{
+								Value: "db.m6g.8xlarge",
+							},
+							{
+								Value: "db.m6g.12xlarge",
+							},
+							{
+								Value: "db.m6g.16xlarge",
+							},
+						},
+						DefaultValue: "db.t3.micro",
+					},
+					{
+						Dependencies: []dbaasoperator.FieldDependency{
+							{
+								Field: dbaasoperator.ProvisioningDatabaseType,
+								Value: oracleSe2,
+							},
+						},
+						Options: []dbaasoperator.Option{
+							{
+								Value: "db.t3.small",
+							},
+							{
+								Value: "db.t3.medium",
+							},
+							{
+								Value: "db.t3.large",
+							},
+							{
+								Value: "db.t3.xlarge",
+							},
+							{
+								Value: "db.t3.2xlarge",
+							},
+							{
+								Value: "db.r4.large",
+							},
+							{
+								Value: "db.r4.xlarge",
+							},
+							{
+								Value: "db.r4.2xlarge",
+							},
+							{
+								Value: "db.r4.4xlarge",
+							},
+							{
+								Value: "db.r4.8xlarge",
+							},
+							{
+								Value: "db.r4.16xlarge",
+							},
+							{
+								Value: "db.r5.large",
+							},
+							{
+								Value: "db.r5.xlarge",
+							},
+							{
+								Value: "db.r5.2xlarge",
+							},
+							{
+								Value: "db.r5.4xlarge",
+							},
+							{
+								Value: "db.r5.8xlarge",
+							},
+							{
+								Value: "db.r5.12xlarge",
+							},
+							{
+								Value: "db.r5.16xlarge",
+							},
+							{
+								Value: "db.r5.24xlarge",
+							},
+							{
+								Value: "db.r5.large.tpc1.mem2x",
+							},
+							{
+								Value: "db.r5.xlarge.tpc2.mem2x",
+							},
+							{
+								Value: "db.r5.xlarge.tpc2.mem4x",
+							},
+							{
+								Value: "db.r5.2xlarge.tpc1.mem2x",
+							},
+							{
+								Value: "db.r5.2xlarge.tpc2.mem4x",
+							},
+							{
+								Value: "db.r5.2xlarge.tpc2.mem8x",
+							},
+							{
+								Value: "db.r5.4xlarge.tpc2.mem2x",
+							},
+							{
+								Value: "db.r5.4xlarge.tpc2.mem3x",
+							},
+							{
+								Value: "db.r5.4xlarge.tpc2.mem4x",
+							},
+							{
+								Value: "db.r5.6xlarge.tpc2.mem4x",
+							},
+							{
+								Value: "db.r5.8xlarge.tpc2.mem3x",
+							},
+							{
+								Value: "db.r5.12xlarge.tpc2.mem2x",
+							},
+							{
+								Value: "db.r5b.large",
+							},
+							{
+								Value: "db.r5b.xlarge",
+							},
+							{
+								Value: "db.r5b.2xlarge",
+							},
+							{
+								Value: "db.r5b.4xlarge",
+							},
+							{
+								Value: "db.r5b.8xlarge",
+							},
+							{
+								Value: "db.r5b.12xlarge",
+							},
+							{
+								Value: "db.r5b.16xlarge",
+							},
+							{
+								Value: "db.r5b.24xlarge",
+							},
+							{
+								Value: "db.r5b.large.tpc1.mem2x",
+							},
+							{
+								Value: "db.r5b.xlarge.tpc2.mem2x",
+							},
+							{
+								Value: "db.r5b.xlarge.tpc2.mem4x",
+							},
+							{
+								Value: "db.r5b.2xlarge.tpc1.mem2x",
+							},
+							{
+								Value: "db.r5b.2xlarge.tpc2.mem4x",
+							},
+							{
+								Value: "db.r5b.2xlarge.tpc2.mem8x",
+							},
+							{
+								Value: "db.r5b.4xlarge.tpc2.mem2x",
+							},
+							{
+								Value: "db.r5b.4xlarge.tpc2.mem3x",
+							},
+							{
+								Value: "db.r5b.4xlarge.tpc2.mem4x",
+							},
+							{
+								Value: "db.r5b.6xlarge.tpc2.mem4x",
+							},
+							{
+								Value: "db.r5b.8xlarge.tpc2.mem3x",
+							},
+							{
+								Value: "db.r5d.large",
+							},
+							{
+								Value: "db.r5d.xlarge",
+							},
+							{
+								Value: "db.r5d.2xlarge",
+							},
+							{
+								Value: "db.r5d.4xlarge",
+							},
+							{
+								Value: "db.r5d.8xlarge",
+							},
+							{
+								Value: "db.r5d.12xlarge",
+							},
+							{
+								Value: "db.r5d.16xlarge",
+							},
+							{
+								Value: "db.r5d.24xlarge",
+							},
+							{
+								Value: "db.r6i.large",
+							},
+							{
+								Value: "db.r6i.xlarge",
+							},
+							{
+								Value: "db.r6i.2xlarge",
+							},
+							{
+								Value: "db.r6i.4xlarge",
+							},
+							{
+								Value: "db.r6i.8xlarge",
+							},
+							{
+								Value: "db.r6i.12xlarge",
+							},
+							{
+								Value: "db.r6i.16xlarge",
+							},
+							{
+								Value: "db.r6i.24xlarge",
+							},
+							{
+								Value: "db.r6i.32xlarge",
+							},
+							{
+								Value: "db.x1.16xlarge",
+							},
+							{
+								Value: "db.x1.32xlarge",
+							},
+							{
+								Value: "db.x1e.xlarge",
+							},
+							{
+								Value: "db.x1e.2xlarge",
+							},
+							{
+								Value: "db.x1e.4xlarge",
+							},
+							{
+								Value: "db.x1e.8xlarge",
+							},
+							{
+								Value: "db.x1e.16xlarge",
+							},
+							{
+								Value: "db.x1e.32xlarge",
+							},
+							{
+								Value: "db.z1d.large",
+							},
+							{
+								Value: "db.z1d.xlarge",
+							},
+							{
+								Value: "db.z1d.2xlarge",
+							},
+							{
+								Value: "db.z1d.3xlarge",
+							},
+							{
+								Value: "db.z1d.6xlarge",
+							},
+							{
+								Value: "db.z1d.12xlarge",
+							},
+							{
+								Value: "db.x2iezn.2xlarge",
+							},
+							{
+								Value: "db.x2iezn.4xlarge",
+							},
+							{
+								Value: "db.x2iedn.xlarge",
+							},
+							{
+								Value: "db.x2iedn.2xlarge",
+							},
+							{
+								Value: "db.x2iedn.4xlarge",
+							},
+							{
+								Value: "db.m4.large",
+							},
+							{
+								Value: "db.m4.xlarge",
+							},
+							{
+								Value: "db.m4.2xlarge",
+							},
+							{
+								Value: "db.m4.4xlarge",
+							},
+							{
+								Value: "db.m4.10xlarge",
+							},
+							{
+								Value: "db.m4.16xlarge",
+							},
+							{
+								Value: "db.m5.large",
+							},
+							{
+								Value: "db.m5.xlarge",
+							},
+							{
+								Value: "db.m5.2xlarge",
+							},
+							{
+								Value: "db.m5.4xlarge",
+							},
+							{
+								Value: "db.m5.8xlarge",
+							},
+							{
+								Value: "db.m5.12xlarge",
+							},
+							{
+								Value: "db.m5.16xlarge",
+							},
+							{
+								Value: "db.m5.24xlarge",
+							},
+							{
+								Value: "db.m5d.large",
+							},
+							{
+								Value: "db.m5d.xlarge",
+							},
+							{
+								Value: "db.m5d.2xlarge",
+							},
+							{
+								Value: "db.m5d.4xlarge",
+							},
+							{
+								Value: "db.m5d.8xlarge",
+							},
+							{
+								Value: "db.m5d.12xlarge",
+							},
+							{
+								Value: "db.m5d.16xlarge",
+							},
+							{
+								Value: "db.m5d.24xlarge",
+							},
+							{
+								Value: "db.m6i.large",
+							},
+							{
+								Value: "db.m6i.xlarge",
+							},
+							{
+								Value: "db.m6i.2xlarge",
+							},
+							{
+								Value: "db.m6i.4xlarge",
+							},
+							{
+								Value: "db.m6i.8xlarge",
+							},
+							{
+								Value: "db.m6i.12xlarge",
+							},
+							{
+								Value: "db.m6i.16xlarge",
+							},
+							{
+								Value: "db.m6i.24xlarge",
+							},
+							{
+								Value: "db.m6i.32xlarge",
+							},
+						},
+						DefaultValue: "db.t3.small",
+					},
+					{
+						Dependencies: []dbaasoperator.FieldDependency{
+							{
+								Field: dbaasoperator.ProvisioningDatabaseType,
+								Value: oracleSe2Cdb,
+							},
+						},
+						Options: []dbaasoperator.Option{
+							{
+								Value: "db.t3.small",
+							},
+							{
+								Value: "db.t3.medium",
+							},
+							{
+								Value: "db.t3.large",
+							},
+							{
+								Value: "db.t3.xlarge",
+							},
+							{
+								Value: "db.t3.2xlarge",
+							},
+							{
+								Value: "db.r4.large",
+							},
+							{
+								Value: "db.r4.xlarge",
+							},
+							{
+								Value: "db.r4.2xlarge",
+							},
+							{
+								Value: "db.r4.4xlarge",
+							},
+							{
+								Value: "db.r4.8xlarge",
+							},
+							{
+								Value: "db.r4.16xlarge",
+							},
+							{
+								Value: "db.r5.large",
+							},
+							{
+								Value: "db.r5.xlarge",
+							},
+							{
+								Value: "db.r5.2xlarge",
+							},
+							{
+								Value: "db.r5.4xlarge",
+							},
+							{
+								Value: "db.r5.8xlarge",
+							},
+							{
+								Value: "db.r5.12xlarge",
+							},
+							{
+								Value: "db.r5.16xlarge",
+							},
+							{
+								Value: "db.r5.24xlarge",
+							},
+							{
+								Value: "db.r5.large.tpc1.mem2x",
+							},
+							{
+								Value: "db.r5.xlarge.tpc2.mem2x",
+							},
+							{
+								Value: "db.r5.xlarge.tpc2.mem4x",
+							},
+							{
+								Value: "db.r5.2xlarge.tpc1.mem2x",
+							},
+							{
+								Value: "db.r5.2xlarge.tpc2.mem4x",
+							},
+							{
+								Value: "db.r5.2xlarge.tpc2.mem8x",
+							},
+							{
+								Value: "db.r5.4xlarge.tpc2.mem2x",
+							},
+							{
+								Value: "db.r5.4xlarge.tpc2.mem3x",
+							},
+							{
+								Value: "db.r5.4xlarge.tpc2.mem4x",
+							},
+							{
+								Value: "db.r5.6xlarge.tpc2.mem4x",
+							},
+							{
+								Value: "db.r5.8xlarge.tpc2.mem3x",
+							},
+							{
+								Value: "db.r5.12xlarge.tpc2.mem2x",
+							},
+							{
+								Value: "db.r5b.large",
+							},
+							{
+								Value: "db.r5b.xlarge",
+							},
+							{
+								Value: "db.r5b.2xlarge",
+							},
+							{
+								Value: "db.r5b.4xlarge",
+							},
+							{
+								Value: "db.r5b.8xlarge",
+							},
+							{
+								Value: "db.r5b.12xlarge",
+							},
+							{
+								Value: "db.r5b.16xlarge",
+							},
+							{
+								Value: "db.r5b.24xlarge",
+							},
+							{
+								Value: "db.r5b.large.tpc1.mem2x",
+							},
+							{
+								Value: "db.r5b.xlarge.tpc2.mem2x",
+							},
+							{
+								Value: "db.r5b.xlarge.tpc2.mem4x",
+							},
+							{
+								Value: "db.r5b.2xlarge.tpc1.mem2x",
+							},
+							{
+								Value: "db.r5b.2xlarge.tpc2.mem4x",
+							},
+							{
+								Value: "db.r5b.2xlarge.tpc2.mem8x",
+							},
+							{
+								Value: "db.r5b.4xlarge.tpc2.mem2x",
+							},
+							{
+								Value: "db.r5b.4xlarge.tpc2.mem3x",
+							},
+							{
+								Value: "db.r5b.4xlarge.tpc2.mem4x",
+							},
+							{
+								Value: "db.r5b.6xlarge.tpc2.mem4x",
+							},
+							{
+								Value: "db.r5b.8xlarge.tpc2.mem3x",
+							},
+							{
+								Value: "db.r5d.large",
+							},
+							{
+								Value: "db.r5d.xlarge",
+							},
+							{
+								Value: "db.r5d.2xlarge",
+							},
+							{
+								Value: "db.r5d.4xlarge",
+							},
+							{
+								Value: "db.r5d.8xlarge",
+							},
+							{
+								Value: "db.r5d.12xlarge",
+							},
+							{
+								Value: "db.r5d.16xlarge",
+							},
+							{
+								Value: "db.r5d.24xlarge",
+							},
+							{
+								Value: "db.r6i.large",
+							},
+							{
+								Value: "db.r6i.xlarge",
+							},
+							{
+								Value: "db.r6i.2xlarge",
+							},
+							{
+								Value: "db.r6i.4xlarge",
+							},
+							{
+								Value: "db.r6i.8xlarge",
+							},
+							{
+								Value: "db.r6i.12xlarge",
+							},
+							{
+								Value: "db.r6i.16xlarge",
+							},
+							{
+								Value: "db.r6i.24xlarge",
+							},
+							{
+								Value: "db.r6i.32xlarge",
+							},
+							{
+								Value: "db.x1.16xlarge",
+							},
+							{
+								Value: "db.x1.32xlarge",
+							},
+							{
+								Value: "db.x1e.xlarge",
+							},
+							{
+								Value: "db.x1e.2xlarge",
+							},
+							{
+								Value: "db.x1e.4xlarge",
+							},
+							{
+								Value: "db.x1e.8xlarge",
+							},
+							{
+								Value: "db.x1e.16xlarge",
+							},
+							{
+								Value: "db.x1e.32xlarge",
+							},
+							{
+								Value: "db.z1d.large",
+							},
+							{
+								Value: "db.z1d.xlarge",
+							},
+							{
+								Value: "db.z1d.2xlarge",
+							},
+							{
+								Value: "db.z1d.3xlarge",
+							},
+							{
+								Value: "db.z1d.6xlarge",
+							},
+							{
+								Value: "db.z1d.12xlarge",
+							},
+							{
+								Value: "db.x2iezn.2xlarge",
+							},
+							{
+								Value: "db.x2iezn.4xlarge",
+							},
+							{
+								Value: "db.x2iedn.xlarge",
+							},
+							{
+								Value: "db.x2iedn.2xlarge",
+							},
+							{
+								Value: "db.x2iedn.4xlarge",
+							},
+							{
+								Value: "db.m4.large",
+							},
+							{
+								Value: "db.m4.xlarge",
+							},
+							{
+								Value: "db.m4.2xlarge",
+							},
+							{
+								Value: "db.m4.4xlarge",
+							},
+							{
+								Value: "db.m4.10xlarge",
+							},
+							{
+								Value: "db.m4.16xlarge",
+							},
+							{
+								Value: "db.m5.large",
+							},
+							{
+								Value: "db.m5.xlarge",
+							},
+							{
+								Value: "db.m5.2xlarge",
+							},
+							{
+								Value: "db.m5.4xlarge",
+							},
+							{
+								Value: "db.m5.8xlarge",
+							},
+							{
+								Value: "db.m5.12xlarge",
+							},
+							{
+								Value: "db.m5.16xlarge",
+							},
+							{
+								Value: "db.m5.24xlarge",
+							},
+							{
+								Value: "db.m5d.large",
+							},
+							{
+								Value: "db.m5d.xlarge",
+							},
+							{
+								Value: "db.m5d.2xlarge",
+							},
+							{
+								Value: "db.m5d.4xlarge",
+							},
+							{
+								Value: "db.m5d.8xlarge",
+							},
+							{
+								Value: "db.m5d.12xlarge",
+							},
+							{
+								Value: "db.m5d.16xlarge",
+							},
+							{
+								Value: "db.m5d.24xlarge",
+							},
+							{
+								Value: "db.m6i.large",
+							},
+							{
+								Value: "db.m6i.xlarge",
+							},
+							{
+								Value: "db.m6i.2xlarge",
+							},
+							{
+								Value: "db.m6i.4xlarge",
+							},
+							{
+								Value: "db.m6i.8xlarge",
+							},
+							{
+								Value: "db.m6i.12xlarge",
+							},
+							{
+								Value: "db.m6i.16xlarge",
+							},
+							{
+								Value: "db.m6i.24xlarge",
+							},
+							{
+								Value: "db.m6i.32xlarge",
+							},
+						},
+						DefaultValue: "db.t3.small",
+					},
+					{
+						Dependencies: []dbaasoperator.FieldDependency{
+							{
+								Field: dbaasoperator.ProvisioningDatabaseType,
+								Value: sqlserverEx,
+							},
+						},
+						Options: []dbaasoperator.Option{
+							{
+								Value: "db.t2.micro",
+							},
+							{
+								Value: "db.t2.small",
+							},
+							{
+								Value: "db.t2.medium",
+							},
+							{
+								Value: "db.t2.large",
+							},
+							{
+								Value: "db.t3.small",
+							},
+							{
+								Value: "db.t3.medium",
+							},
+							{
+								Value: "db.t3.large",
+							},
+							{
+								Value: "db.t3.xlarge",
+							},
+							{
+								Value: "db.t3.2xlarge",
+							},
+							{
+								Value: "db.r3.large",
+							},
+							{
+								Value: "db.r3.xlarge",
+							},
+							{
+								Value: "db.r3.2xlarge",
+							},
+							{
+								Value: "db.r3.4xlarge",
+							},
+							{
+								Value: "db.r3.8xlarge",
+							},
+							{
+								Value: "db.r4.large",
+							},
+							{
+								Value: "db.r4.xlarge",
+							},
+							{
+								Value: "db.r4.2xlarge",
+							},
+							{
+								Value: "db.r4.4xlarge",
+							},
+							{
+								Value: "db.r4.8xlarge",
+							},
+							{
+								Value: "db.r4.16xlarge",
+							},
+							{
+								Value: "db.r5.large",
+							},
+							{
+								Value: "db.r5.xlarge",
+							},
+							{
+								Value: "db.r5.2xlarge",
+							},
+							{
+								Value: "db.r5.4xlarge",
+							},
+							{
+								Value: "db.r5.8xlarge",
+							},
+							{
+								Value: "db.r5.12xlarge",
+							},
+							{
+								Value: "db.r5.16xlarge",
+							},
+							{
+								Value: "db.r5.24xlarge",
+							},
+							{
+								Value: "db.r5b.large",
+							},
+							{
+								Value: "db.r5b.xlarge",
+							},
+							{
+								Value: "db.r5b.2xlarge",
+							},
+							{
+								Value: "db.r5b.4xlarge",
+							},
+							{
+								Value: "db.r5b.8xlarge",
+							},
+							{
+								Value: "db.r5b.12xlarge",
+							},
+							{
+								Value: "db.r5b.16xlarge",
+							},
+							{
+								Value: "db.r5b.24xlarge",
+							},
+							{
+								Value: "db.r5d.large",
+							},
+							{
+								Value: "db.r5d.xlarge",
+							},
+							{
+								Value: "db.r5d.2xlarge",
+							},
+							{
+								Value: "db.r5d.4xlarge",
+							},
+							{
+								Value: "db.r5d.8xlarge",
+							},
+							{
+								Value: "db.r5d.12xlarge",
+							},
+							{
+								Value: "db.r5d.16xlarge",
+							},
+							{
+								Value: "db.r5d.24xlarge",
+							},
+							{
+								Value: "db.r6i.large",
+							},
+							{
+								Value: "db.r6i.xlarge",
+							},
+							{
+								Value: "db.r6i.2xlarge",
+							},
+							{
+								Value: "db.r6i.4xlarge",
+							},
+							{
+								Value: "db.r6i.8xlarge",
+							},
+							{
+								Value: "db.r6i.12xlarge",
+							},
+							{
+								Value: "db.r6i.16xlarge",
+							},
+							{
+								Value: "db.r6i.24xlarge",
+							},
+							{
+								Value: "db.r6i.32xlarge",
+							},
+							{
+								Value: "db.x1.16xlarge",
+							},
+							{
+								Value: "db.x1.32xlarge",
+							},
+							{
+								Value: "db.x1e.xlarge",
+							},
+							{
+								Value: "db.x1e.2xlarge",
+							},
+							{
+								Value: "db.x1e.4xlarge",
+							},
+							{
+								Value: "db.x1e.8xlarge",
+							},
+							{
+								Value: "db.x1e.16xlarge",
+							},
+							{
+								Value: "db.x1e.32xlarge",
+							},
+							{
+								Value: "db.z1d.large",
+							},
+							{
+								Value: "db.z1d.xlarge",
+							},
+							{
+								Value: "db.z1d.2xlarge",
+							},
+							{
+								Value: "db.z1d.3xlarge",
+							},
+							{
+								Value: "db.z1d.6xlarge",
+							},
+							{
+								Value: "db.z1d.12xlarge",
+							},
+							{
+								Value: "db.m3.medium",
+							},
+							{
+								Value: "db.m3.large",
+							},
+							{
+								Value: "db.m3.xlarge",
+							},
+							{
+								Value: "db.m3.2xlarge",
+							},
+							{
+								Value: "db.m4.large",
+							},
+							{
+								Value: "db.m4.xlarge",
+							},
+							{
+								Value: "db.m4.2xlarge",
+							},
+							{
+								Value: "db.m4.4xlarge",
+							},
+							{
+								Value: "db.m4.10xlarge",
+							},
+							{
+								Value: "db.m4.16xlarge",
+							},
+							{
+								Value: "db.m5.large",
+							},
+							{
+								Value: "db.m5.xlarge",
+							},
+							{
+								Value: "db.m5.2xlarge",
+							},
+							{
+								Value: "db.m5.4xlarge",
+							},
+							{
+								Value: "db.m5.8xlarge",
+							},
+							{
+								Value: "db.m5.12xlarge",
+							},
+							{
+								Value: "db.m5.16xlarge",
+							},
+							{
+								Value: "db.m5.24xlarge",
+							},
+							{
+								Value: "db.m5d.large",
+							},
+							{
+								Value: "db.m5d.xlarge",
+							},
+							{
+								Value: "db.m5d.2xlarge",
+							},
+							{
+								Value: "db.m5d.4xlarge",
+							},
+							{
+								Value: "db.m5d.8xlarge",
+							},
+							{
+								Value: "db.m5d.12xlarge",
+							},
+							{
+								Value: "db.m5d.16xlarge",
+							},
+							{
+								Value: "db.m5d.24xlarge",
+							},
+							{
+								Value: "db.m6i.large",
+							},
+							{
+								Value: "db.m6i.xlarge",
+							},
+							{
+								Value: "db.m6i.2xlarge",
+							},
+							{
+								Value: "db.m6i.4xlarge",
+							},
+							{
+								Value: "db.m6i.8xlarge",
+							},
+							{
+								Value: "db.m6i.12xlarge",
+							},
+							{
+								Value: "db.m6i.16xlarge",
+							},
+							{
+								Value: "db.m6i.24xlarge",
+							},
+							{
+								Value: "db.m6i.32xlarge",
+							},
+						},
+						DefaultValue: "db.t3.small",
+					},
+					{
+						Dependencies: []dbaasoperator.FieldDependency{
+							{
+								Field: dbaasoperator.ProvisioningDatabaseType,
+								Value: sqlserverWeb,
+							},
+						},
+						Options: []dbaasoperator.Option{
+							{
+								Value: "db.t2.micro",
+							},
+							{
+								Value: "db.t2.small",
+							},
+							{
+								Value: "db.t2.medium",
+							},
+							{
+								Value: "db.t2.large",
+							},
+							{
+								Value: "db.t3.small",
+							},
+							{
+								Value: "db.t3.medium",
+							},
+							{
+								Value: "db.t3.large",
+							},
+							{
+								Value: "db.t3.xlarge",
+							},
+							{
+								Value: "db.t3.2xlarge",
+							},
+							{
+								Value: "db.r3.large",
+							},
+							{
+								Value: "db.r3.xlarge",
+							},
+							{
+								Value: "db.r3.2xlarge",
+							},
+							{
+								Value: "db.r3.4xlarge",
+							},
+							{
+								Value: "db.r3.8xlarge",
+							},
+							{
+								Value: "db.r4.large",
+							},
+							{
+								Value: "db.r4.xlarge",
+							},
+							{
+								Value: "db.r4.2xlarge",
+							},
+							{
+								Value: "db.r4.4xlarge",
+							},
+							{
+								Value: "db.r4.8xlarge",
+							},
+							{
+								Value: "db.r4.16xlarge",
+							},
+							{
+								Value: "db.r5.large",
+							},
+							{
+								Value: "db.r5.xlarge",
+							},
+							{
+								Value: "db.r5.2xlarge",
+							},
+							{
+								Value: "db.r5.4xlarge",
+							},
+							{
+								Value: "db.r5.8xlarge",
+							},
+							{
+								Value: "db.r5.12xlarge",
+							},
+							{
+								Value: "db.r5.16xlarge",
+							},
+							{
+								Value: "db.r5.24xlarge",
+							},
+							{
+								Value: "db.r5b.large",
+							},
+							{
+								Value: "db.r5b.xlarge",
+							},
+							{
+								Value: "db.r5b.2xlarge",
+							},
+							{
+								Value: "db.r5b.4xlarge",
+							},
+							{
+								Value: "db.r5b.8xlarge",
+							},
+							{
+								Value: "db.r5b.12xlarge",
+							},
+							{
+								Value: "db.r5b.16xlarge",
+							},
+							{
+								Value: "db.r5b.24xlarge",
+							},
+							{
+								Value: "db.r5d.large",
+							},
+							{
+								Value: "db.r5d.xlarge",
+							},
+							{
+								Value: "db.r5d.2xlarge",
+							},
+							{
+								Value: "db.r5d.4xlarge",
+							},
+							{
+								Value: "db.r5d.8xlarge",
+							},
+							{
+								Value: "db.r5d.12xlarge",
+							},
+							{
+								Value: "db.r5d.16xlarge",
+							},
+							{
+								Value: "db.r5d.24xlarge",
+							},
+							{
+								Value: "db.r6i.large",
+							},
+							{
+								Value: "db.r6i.xlarge",
+							},
+							{
+								Value: "db.r6i.2xlarge",
+							},
+							{
+								Value: "db.r6i.4xlarge",
+							},
+							{
+								Value: "db.r6i.8xlarge",
+							},
+							{
+								Value: "db.r6i.12xlarge",
+							},
+							{
+								Value: "db.r6i.16xlarge",
+							},
+							{
+								Value: "db.r6i.24xlarge",
+							},
+							{
+								Value: "db.r6i.32xlarge",
+							},
+							{
+								Value: "db.x1.16xlarge",
+							},
+							{
+								Value: "db.x1.32xlarge",
+							},
+							{
+								Value: "db.x1e.xlarge",
+							},
+							{
+								Value: "db.x1e.2xlarge",
+							},
+							{
+								Value: "db.x1e.4xlarge",
+							},
+							{
+								Value: "db.x1e.8xlarge",
+							},
+							{
+								Value: "db.x1e.16xlarge",
+							},
+							{
+								Value: "db.x1e.32xlarge",
+							},
+							{
+								Value: "db.z1d.large",
+							},
+							{
+								Value: "db.z1d.xlarge",
+							},
+							{
+								Value: "db.z1d.2xlarge",
+							},
+							{
+								Value: "db.z1d.3xlarge",
+							},
+							{
+								Value: "db.z1d.6xlarge",
+							},
+							{
+								Value: "db.z1d.12xlarge",
+							},
+							{
+								Value: "db.m3.medium",
+							},
+							{
+								Value: "db.m3.large",
+							},
+							{
+								Value: "db.m3.xlarge",
+							},
+							{
+								Value: "db.m3.2xlarge",
+							},
+							{
+								Value: "db.m4.large",
+							},
+							{
+								Value: "db.m4.xlarge",
+							},
+							{
+								Value: "db.m4.2xlarge",
+							},
+							{
+								Value: "db.m4.4xlarge",
+							},
+							{
+								Value: "db.m4.10xlarge",
+							},
+							{
+								Value: "db.m4.16xlarge",
+							},
+							{
+								Value: "db.m5.large",
+							},
+							{
+								Value: "db.m5.xlarge",
+							},
+							{
+								Value: "db.m5.2xlarge",
+							},
+							{
+								Value: "db.m5.4xlarge",
+							},
+							{
+								Value: "db.m5.8xlarge",
+							},
+							{
+								Value: "db.m5.12xlarge",
+							},
+							{
+								Value: "db.m5.16xlarge",
+							},
+							{
+								Value: "db.m5.24xlarge",
+							},
+							{
+								Value: "db.m5d.large",
+							},
+							{
+								Value: "db.m5d.xlarge",
+							},
+							{
+								Value: "db.m5d.2xlarge",
+							},
+							{
+								Value: "db.m5d.4xlarge",
+							},
+							{
+								Value: "db.m5d.8xlarge",
+							},
+							{
+								Value: "db.m5d.12xlarge",
+							},
+							{
+								Value: "db.m5d.16xlarge",
+							},
+							{
+								Value: "db.m5d.24xlarge",
+							},
+							{
+								Value: "db.m6i.large",
+							},
+							{
+								Value: "db.m6i.xlarge",
+							},
+							{
+								Value: "db.m6i.2xlarge",
+							},
+							{
+								Value: "db.m6i.4xlarge",
+							},
+							{
+								Value: "db.m6i.8xlarge",
+							},
+							{
+								Value: "db.m6i.12xlarge",
+							},
+							{
+								Value: "db.m6i.16xlarge",
+							},
+							{
+								Value: "db.m6i.24xlarge",
+							},
+							{
+								Value: "db.m6i.32xlarge",
+							},
+						},
+						DefaultValue: "db.t3.small",
+					},
+					{
+						Dependencies: []dbaasoperator.FieldDependency{
+							{
+								Field: dbaasoperator.ProvisioningDatabaseType,
+								Value: sqlserverSe,
+							},
+						},
+						Options: []dbaasoperator.Option{
+							{
+								Value: "db.t2.micro",
+							},
+							{
+								Value: "db.t2.small",
+							},
+							{
+								Value: "db.t2.medium",
+							},
+							{
+								Value: "db.t2.large",
+							},
+							{
+								Value: "db.t3.small",
+							},
+							{
+								Value: "db.t3.medium",
+							},
+							{
+								Value: "db.t3.large",
+							},
+							{
+								Value: "db.t3.xlarge",
+							},
+							{
+								Value: "db.t3.2xlarge",
+							},
+							{
+								Value: "db.r3.large",
+							},
+							{
+								Value: "db.r3.xlarge",
+							},
+							{
+								Value: "db.r3.2xlarge",
+							},
+							{
+								Value: "db.r3.4xlarge",
+							},
+							{
+								Value: "db.r3.8xlarge",
+							},
+							{
+								Value: "db.r4.large",
+							},
+							{
+								Value: "db.r4.xlarge",
+							},
+							{
+								Value: "db.r4.2xlarge",
+							},
+							{
+								Value: "db.r4.4xlarge",
+							},
+							{
+								Value: "db.r4.8xlarge",
+							},
+							{
+								Value: "db.r4.16xlarge",
+							},
+							{
+								Value: "db.r5.large",
+							},
+							{
+								Value: "db.r5.xlarge",
+							},
+							{
+								Value: "db.r5.2xlarge",
+							},
+							{
+								Value: "db.r5.4xlarge",
+							},
+							{
+								Value: "db.r5.8xlarge",
+							},
+							{
+								Value: "db.r5.12xlarge",
+							},
+							{
+								Value: "db.r5.16xlarge",
+							},
+							{
+								Value: "db.r5.24xlarge",
+							},
+							{
+								Value: "db.r5b.large",
+							},
+							{
+								Value: "db.r5b.xlarge",
+							},
+							{
+								Value: "db.r5b.2xlarge",
+							},
+							{
+								Value: "db.r5b.4xlarge",
+							},
+							{
+								Value: "db.r5b.8xlarge",
+							},
+							{
+								Value: "db.r5b.12xlarge",
+							},
+							{
+								Value: "db.r5b.16xlarge",
+							},
+							{
+								Value: "db.r5b.24xlarge",
+							},
+							{
+								Value: "db.r5d.large",
+							},
+							{
+								Value: "db.r5d.xlarge",
+							},
+							{
+								Value: "db.r5d.2xlarge",
+							},
+							{
+								Value: "db.r5d.4xlarge",
+							},
+							{
+								Value: "db.r5d.8xlarge",
+							},
+							{
+								Value: "db.r5d.12xlarge",
+							},
+							{
+								Value: "db.r5d.16xlarge",
+							},
+							{
+								Value: "db.r5d.24xlarge",
+							},
+							{
+								Value: "db.r6i.large",
+							},
+							{
+								Value: "db.r6i.xlarge",
+							},
+							{
+								Value: "db.r6i.2xlarge",
+							},
+							{
+								Value: "db.r6i.4xlarge",
+							},
+							{
+								Value: "db.r6i.8xlarge",
+							},
+							{
+								Value: "db.r6i.12xlarge",
+							},
+							{
+								Value: "db.r6i.16xlarge",
+							},
+							{
+								Value: "db.r6i.24xlarge",
+							},
+							{
+								Value: "db.r6i.32xlarge",
+							},
+							{
+								Value: "db.x1.16xlarge",
+							},
+							{
+								Value: "db.x1.32xlarge",
+							},
+							{
+								Value: "db.x1e.xlarge",
+							},
+							{
+								Value: "db.x1e.2xlarge",
+							},
+							{
+								Value: "db.x1e.4xlarge",
+							},
+							{
+								Value: "db.x1e.8xlarge",
+							},
+							{
+								Value: "db.x1e.16xlarge",
+							},
+							{
+								Value: "db.x1e.32xlarge",
+							},
+							{
+								Value: "db.z1d.large",
+							},
+							{
+								Value: "db.z1d.xlarge",
+							},
+							{
+								Value: "db.z1d.2xlarge",
+							},
+							{
+								Value: "db.z1d.3xlarge",
+							},
+							{
+								Value: "db.z1d.6xlarge",
+							},
+							{
+								Value: "db.z1d.12xlarge",
+							},
+							{
+								Value: "db.m3.medium",
+							},
+							{
+								Value: "db.m3.large",
+							},
+							{
+								Value: "db.m3.xlarge",
+							},
+							{
+								Value: "db.m3.2xlarge",
+							},
+							{
+								Value: "db.m4.large",
+							},
+							{
+								Value: "db.m4.xlarge",
+							},
+							{
+								Value: "db.m4.2xlarge",
+							},
+							{
+								Value: "db.m4.4xlarge",
+							},
+							{
+								Value: "db.m4.10xlarge",
+							},
+							{
+								Value: "db.m4.16xlarge",
+							},
+							{
+								Value: "db.m5.large",
+							},
+							{
+								Value: "db.m5.xlarge",
+							},
+							{
+								Value: "db.m5.2xlarge",
+							},
+							{
+								Value: "db.m5.4xlarge",
+							},
+							{
+								Value: "db.m5.8xlarge",
+							},
+							{
+								Value: "db.m5.12xlarge",
+							},
+							{
+								Value: "db.m5.16xlarge",
+							},
+							{
+								Value: "db.m5.24xlarge",
+							},
+							{
+								Value: "db.m5d.large",
+							},
+							{
+								Value: "db.m5d.xlarge",
+							},
+							{
+								Value: "db.m5d.2xlarge",
+							},
+							{
+								Value: "db.m5d.4xlarge",
+							},
+							{
+								Value: "db.m5d.8xlarge",
+							},
+							{
+								Value: "db.m5d.12xlarge",
+							},
+							{
+								Value: "db.m5d.16xlarge",
+							},
+							{
+								Value: "db.m5d.24xlarge",
+							},
+							{
+								Value: "db.m6i.large",
+							},
+							{
+								Value: "db.m6i.xlarge",
+							},
+							{
+								Value: "db.m6i.2xlarge",
+							},
+							{
+								Value: "db.m6i.4xlarge",
+							},
+							{
+								Value: "db.m6i.8xlarge",
+							},
+							{
+								Value: "db.m6i.12xlarge",
+							},
+							{
+								Value: "db.m6i.16xlarge",
+							},
+							{
+								Value: "db.m6i.24xlarge",
+							},
+							{
+								Value: "db.m6i.32xlarge",
+							},
+						},
+						DefaultValue: "db.t3.small",
+					},
+					{
+						Dependencies: []dbaasoperator.FieldDependency{
+							{
+								Field: dbaasoperator.ProvisioningDatabaseType,
+								Value: sqlserverEe,
+							},
+						},
+						Options: []dbaasoperator.Option{
+							{
+								Value: "db.t2.micro",
+							},
+							{
+								Value: "db.t2.small",
+							},
+							{
+								Value: "db.t2.medium",
+							},
+							{
+								Value: "db.t2.large",
+							},
+							{
+								Value: "db.t3.small",
+							},
+							{
+								Value: "db.t3.medium",
+							},
+							{
+								Value: "db.t3.large",
+							},
+							{
+								Value: "db.t3.xlarge",
+							},
+							{
+								Value: "db.t3.2xlarge",
+							},
+							{
+								Value: "db.r3.large",
+							},
+							{
+								Value: "db.r3.xlarge",
+							},
+							{
+								Value: "db.r3.2xlarge",
+							},
+							{
+								Value: "db.r3.4xlarge",
+							},
+							{
+								Value: "db.r3.8xlarge",
+							},
+							{
+								Value: "db.r4.large",
+							},
+							{
+								Value: "db.r4.xlarge",
+							},
+							{
+								Value: "db.r4.2xlarge",
+							},
+							{
+								Value: "db.r4.4xlarge",
+							},
+							{
+								Value: "db.r4.8xlarge",
+							},
+							{
+								Value: "db.r4.16xlarge",
+							},
+							{
+								Value: "db.r5.large",
+							},
+							{
+								Value: "db.r5.xlarge",
+							},
+							{
+								Value: "db.r5.2xlarge",
+							},
+							{
+								Value: "db.r5.4xlarge",
+							},
+							{
+								Value: "db.r5.8xlarge",
+							},
+							{
+								Value: "db.r5.12xlarge",
+							},
+							{
+								Value: "db.r5.16xlarge",
+							},
+							{
+								Value: "db.r5.24xlarge",
+							},
+							{
+								Value: "db.r5b.large",
+							},
+							{
+								Value: "db.r5b.xlarge",
+							},
+							{
+								Value: "db.r5b.2xlarge",
+							},
+							{
+								Value: "db.r5b.4xlarge",
+							},
+							{
+								Value: "db.r5b.8xlarge",
+							},
+							{
+								Value: "db.r5b.12xlarge",
+							},
+							{
+								Value: "db.r5b.16xlarge",
+							},
+							{
+								Value: "db.r5b.24xlarge",
+							},
+							{
+								Value: "db.r5d.large",
+							},
+							{
+								Value: "db.r5d.xlarge",
+							},
+							{
+								Value: "db.r5d.2xlarge",
+							},
+							{
+								Value: "db.r5d.4xlarge",
+							},
+							{
+								Value: "db.r5d.8xlarge",
+							},
+							{
+								Value: "db.r5d.12xlarge",
+							},
+							{
+								Value: "db.r5d.16xlarge",
+							},
+							{
+								Value: "db.r5d.24xlarge",
+							},
+							{
+								Value: "db.r6i.large",
+							},
+							{
+								Value: "db.r6i.xlarge",
+							},
+							{
+								Value: "db.r6i.2xlarge",
+							},
+							{
+								Value: "db.r6i.4xlarge",
+							},
+							{
+								Value: "db.r6i.8xlarge",
+							},
+							{
+								Value: "db.r6i.12xlarge",
+							},
+							{
+								Value: "db.r6i.16xlarge",
+							},
+							{
+								Value: "db.r6i.24xlarge",
+							},
+							{
+								Value: "db.r6i.32xlarge",
+							},
+							{
+								Value: "db.x1.16xlarge",
+							},
+							{
+								Value: "db.x1.32xlarge",
+							},
+							{
+								Value: "db.x1e.xlarge",
+							},
+							{
+								Value: "db.x1e.2xlarge",
+							},
+							{
+								Value: "db.x1e.4xlarge",
+							},
+							{
+								Value: "db.x1e.8xlarge",
+							},
+							{
+								Value: "db.x1e.16xlarge",
+							},
+							{
+								Value: "db.x1e.32xlarge",
+							},
+							{
+								Value: "db.z1d.large",
+							},
+							{
+								Value: "db.z1d.xlarge",
+							},
+							{
+								Value: "db.z1d.2xlarge",
+							},
+							{
+								Value: "db.z1d.3xlarge",
+							},
+							{
+								Value: "db.z1d.6xlarge",
+							},
+							{
+								Value: "db.z1d.12xlarge",
+							},
+							{
+								Value: "db.m3.medium",
+							},
+							{
+								Value: "db.m3.large",
+							},
+							{
+								Value: "db.m3.xlarge",
+							},
+							{
+								Value: "db.m3.2xlarge",
+							},
+							{
+								Value: "db.m4.large",
+							},
+							{
+								Value: "db.m4.xlarge",
+							},
+							{
+								Value: "db.m4.2xlarge",
+							},
+							{
+								Value: "db.m4.4xlarge",
+							},
+							{
+								Value: "db.m4.10xlarge",
+							},
+							{
+								Value: "db.m4.16xlarge",
+							},
+							{
+								Value: "db.m5.large",
+							},
+							{
+								Value: "db.m5.xlarge",
+							},
+							{
+								Value: "db.m5.2xlarge",
+							},
+							{
+								Value: "db.m5.4xlarge",
+							},
+							{
+								Value: "db.m5.8xlarge",
+							},
+							{
+								Value: "db.m5.12xlarge",
+							},
+							{
+								Value: "db.m5.16xlarge",
+							},
+							{
+								Value: "db.m5.24xlarge",
+							},
+							{
+								Value: "db.m5d.large",
+							},
+							{
+								Value: "db.m5d.xlarge",
+							},
+							{
+								Value: "db.m5d.2xlarge",
+							},
+							{
+								Value: "db.m5d.4xlarge",
+							},
+							{
+								Value: "db.m5d.8xlarge",
+							},
+							{
+								Value: "db.m5d.12xlarge",
+							},
+							{
+								Value: "db.m5d.16xlarge",
+							},
+							{
+								Value: "db.m5d.24xlarge",
+							},
+							{
+								Value: "db.m6i.large",
+							},
+							{
+								Value: "db.m6i.xlarge",
+							},
+							{
+								Value: "db.m6i.2xlarge",
+							},
+							{
+								Value: "db.m6i.4xlarge",
+							},
+							{
+								Value: "db.m6i.8xlarge",
+							},
+							{
+								Value: "db.m6i.12xlarge",
+							},
+							{
+								Value: "db.m6i.16xlarge",
+							},
+							{
+								Value: "db.m6i.24xlarge",
+							},
+							{
+								Value: "db.m6i.32xlarge",
+							},
+						},
+						DefaultValue: "db.t3.small",
+					},
 				},
 			},
-			AllowsFreeTrial:              true,
-			ExternalProvisionURL:         provisionDocURL,
-			ExternalProvisionDescription: provisionDescription,
-			InstanceParameterSpecs: []dbaasoperator.InstanceParameterSpec{
-				{
-					Name:        engine,
-					DisplayName: "Engine Type",
-					Type:        "string",
-					Required:    true,
+			dbaasoperator.ProvisioningStorageGib: {
+				DisplayName: "Allocated storage",
+				HelpText:    "The amount of storage in gigabytes (GB) to allocate for the database instance. The minimum required storage is 20 GB for most RDS database instances.",
+				ConditionalData: []dbaasoperator.ConditionalProvisioningParameterData{
+					{
+						DefaultValue: strconv.Itoa(defaultAllocatedStorage),
+					},
 				},
-				{
-					Name:        engineVersion,
-					DisplayName: "Engine Version",
-					Type:        "string",
-					Required:    false,
+			},
+			dbaasoperator.ProvisioningPlan: {
+				ConditionalData: []dbaasoperator.ConditionalProvisioningParameterData{
+					{
+						Options: []dbaasoperator.Option{
+							{
+								Value: dbaasoperator.ProvisioningPlanDedicated,
+							},
+						},
+						DefaultValue: dbaasoperator.ProvisioningPlanDedicated,
+					},
 				},
-				{
-					Name:         dbInstanceClass,
-					DisplayName:  "DB instance class",
-					Type:         "string",
-					Required:     true,
-					DefaultValue: defaultDBInstanceClass,
-				},
-				{
-					Name:         storageType,
-					DisplayName:  "Storage type",
-					Type:         "string",
-					Required:     false,
-					DefaultValue: "gp2",
-				},
-				{
-					Name:         allocatedStorage,
-					DisplayName:  "Allocated storage",
-					Type:         "int",
-					Required:     true,
-					DefaultValue: strconv.Itoa(defaultAllocatedStorage),
-				},
-				{
-					Name:        iops,
-					DisplayName: "Provisioned IOPS",
-					Type:        "int",
-					Required:    false,
-				},
-				{
-					Name:        maxAllocatedStorage,
-					DisplayName: "Maximum storage threshold",
-					Type:        "int",
-					Required:    false,
-				},
-				{
-					Name:        dbSubnetGroupName,
-					DisplayName: "Subnet group",
-					Type:        "string",
-					Required:    false,
-				},
-				{
-					Name:         publiclyAccessible,
-					DisplayName:  "Public access",
-					Type:         "bool",
-					Required:     false,
-					DefaultValue: strconv.FormatBool(defaultPubliclyAccessible),
-				},
-				{
-					Name:        vpcSecurityGroupIDs,
-					DisplayName: "VPC security groups",
-					Type:        "string",
-					Required:    false,
-				},
-				{
-					Name:        licenseModel,
-					DisplayName: "License Model",
-					Type:        "string",
-					Required:    false,
+			},
+			dbaasoperator.ProvisioningCloudProvider: {
+				ConditionalData: []dbaasoperator.ConditionalProvisioningParameterData{
+					{
+						Options: []dbaasoperator.Option{
+							{
+								Value: "AWS",
+							},
+						},
+						DefaultValue: "AWS",
+					},
 				},
 			},
 		},
 	}
-	return instance
 }
 
 // CheckCrdInstalled checks whether dbaas provider CRD, has been created yet

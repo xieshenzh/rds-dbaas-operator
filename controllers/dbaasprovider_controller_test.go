@@ -29,7 +29,7 @@ import (
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
+	dbaasv1beta1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1beta1"
 )
 
 var _ = Describe("DBaaSProviderController", func() {
@@ -92,13 +92,13 @@ var _ = Describe("DBaaSProviderController", func() {
 			AfterEach(assertResourceDeletion(operatorDeployment))
 
 			It("should register DBaaSProvider", func() {
-				rdsProvider := &dbaasv1alpha1.DBaaSProvider{
+				rdsProvider := &dbaasv1beta1.DBaaSProvider{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "rds-registration",
 						Namespace: testNamespace,
 					},
 				}
-				By("check if the CRDB DBaaSProvider is created")
+				By("check if the RDS DBaaSProvider is created")
 				Eventually(func() bool {
 					err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rdsProvider), rdsProvider)
 					return err == nil
@@ -110,7 +110,7 @@ var _ = Describe("DBaaSProviderController", func() {
 				Expect(rdsProvider.Spec.InstanceKind).Should(Equal("RDSInstance"))
 				Expect(rdsProvider.Spec.AllowsFreeTrial).Should(BeTrue())
 				Expect(len(rdsProvider.Spec.CredentialFields)).Should(Equal(5))
-				Expect(len(rdsProvider.Spec.InstanceParameterSpecs)).Should(Equal(11))
+				Expect(len(rdsProvider.Spec.ProvisioningParameters)).Should(Equal(6))
 
 				assertResourceDeletion(rdsProvider)()
 			})

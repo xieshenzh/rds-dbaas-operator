@@ -30,7 +30,7 @@ import (
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
+	dbaasv1beta1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1beta1"
 	rdsdbaasv1alpha1 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
 	"github.com/RHEcosystemAppEng/rds-dbaas-operator/controllers/rds/test"
 	rdsv1alpha1 "github.com/aws-controllers-k8s/rds-controller/apis/v1alpha1"
@@ -67,8 +67,8 @@ var _ = Describe("RDSInventoryController", func() {
 					Name:      inventoryName,
 					Namespace: testNamespace,
 				},
-				Spec: dbaasv1alpha1.DBaaSInventorySpec{
-					CredentialsRef: &dbaasv1alpha1.LocalObjectReference{
+				Spec: dbaasv1beta1.DBaaSInventorySpec{
+					CredentialsRef: &dbaasv1beta1.LocalObjectReference{
 						Name: credentialName,
 					},
 				},
@@ -824,8 +824,8 @@ var _ = Describe("RDSInventoryController", func() {
 							Name:      inventoryName,
 							Namespace: testNamespace,
 						},
-						Spec: dbaasv1alpha1.DBaaSInventorySpec{
-							CredentialsRef: &dbaasv1alpha1.LocalObjectReference{
+						Spec: dbaasv1beta1.DBaaSInventorySpec{
+							CredentialsRef: &dbaasv1beta1.LocalObjectReference{
 								Name: credentialName,
 							},
 						},
@@ -1228,7 +1228,7 @@ var _ = Describe("RDSInventoryController", func() {
 							if len(inv.Status.Instances) < 9 {
 								return false
 							}
-							instancesMap := map[string]dbaasv1alpha1.Instance{}
+							instancesMap := map[string]dbaasv1beta1.Instance{}
 							for i := range inv.Status.Instances {
 								ins := inv.Status.Instances[i]
 								instancesMap[ins.InstanceID] = ins
@@ -1752,8 +1752,8 @@ var _ = Describe("RDSInventoryController", func() {
 						Name:      inventoryName + "-delete",
 						Namespace: testNamespace,
 					},
-					Spec: dbaasv1alpha1.DBaaSInventorySpec{
-						CredentialsRef: &dbaasv1alpha1.LocalObjectReference{
+					Spec: dbaasv1beta1.DBaaSInventorySpec{
+						CredentialsRef: &dbaasv1beta1.LocalObjectReference{
 							Name: credentialName,
 						},
 					},
@@ -1833,8 +1833,8 @@ var _ = Describe("RDSInventoryController", func() {
 					Name:      inventoryName + "-adopting",
 					Namespace: testNamespace,
 				},
-				Spec: dbaasv1alpha1.DBaaSInventorySpec{
-					CredentialsRef: &dbaasv1alpha1.LocalObjectReference{
+				Spec: dbaasv1beta1.DBaaSInventorySpec{
+					CredentialsRef: &dbaasv1beta1.LocalObjectReference{
 						Name: credentialName,
 					},
 				},

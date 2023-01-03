@@ -17,7 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
+	"github.com/RHEcosystemAppEng/dbaas-operator/api/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -29,8 +29,8 @@ type RDSInstance struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   v1alpha1.DBaaSInstanceSpec   `json:"spec,omitempty"`
-	Status v1alpha1.DBaaSInstanceStatus `json:"status,omitempty"`
+	Spec   v1beta1.DBaaSInstanceSpec   `json:"spec,omitempty"`
+	Status v1beta1.DBaaSInstanceStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true

@@ -39,7 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
+	dbaasv1beta1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1beta1"
 	rdsdbaasv1alpha1 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
 	rdsv1alpha1 "github.com/aws-controllers-k8s/rds-controller/apis/v1alpha1"
 	ackv1alpha1 "github.com/aws-controllers-k8s/runtime/apis/core/v1alpha1"
@@ -52,11 +52,8 @@ const (
 
 	instanceFinalizer = "rds.dbaas.redhat.com/instance"
 
-	engine              = "Engine"
 	engineVersion       = "EngineVersion"
-	dbInstanceClass     = "DBInstanceClass"
 	storageType         = "StorageType"
-	allocatedStorage    = "AllocatedStorage"
 	iops                = "IOPS"
 	maxAllocatedStorage = "MaxAllocatedStorage"
 	dbSubnetGroupName   = "DBSubnetGroupName"
@@ -68,6 +65,7 @@ const (
 	defaultAllocatedStorage   = 20
 	defaultPubliclyAccessible = true
 	defaultAvailabilityZone   = "us-east-1a"
+	defaultLicenseModel       = "license-included"
 
 	instanceConditionReady = "ProvisionReady"
 
@@ -122,7 +120,7 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	var instance rdsdbaasv1alpha1.RDSInstance
 
 	var provisionStatus, provisionStatusReason, provisionStatusMessage string
-	var phase dbaasv1alpha1.DBaasInstancePhase
+	var phase dbaasv1beta1.DBaasInstancePhase
 
 	returnUpdating := func() {
 		result = ctrl.Result{Requeue: true}
@@ -180,7 +178,7 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		if len(phase) > 0 {
 			instance.Status.Phase = phase
 		} else if len(instance.Status.Phase) == 0 {
-			instance.Status.Phase = dbaasv1alpha1.InstancePhaseUnknown
+			instance.Status.Phase = dbaasv1beta1.InstancePhaseUnknown
 		}
 		if e := r.Status().Update(ctx, &instance); e != nil {
 			if errors.IsConflict(e) {
@@ -198,7 +196,7 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	checkFinalizer := func() bool {
 		if instance.ObjectMeta.DeletionTimestamp.IsZero() {
 			if !controllerutil.ContainsFinalizer(&instance, instanceFinalizer) {
-				phase = dbaasv1alpha1.InstancePhasePending
+				phase = dbaasv1beta1.InstancePhasePending
 				controllerutil.AddFinalizer(&instance, instanceFinalizer)
 				if e := r.Update(ctx, &instance); e != nil {
 					if errors.IsConflict(e) {
@@ -216,7 +214,7 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			}
 		} else {
 			if controllerutil.ContainsFinalizer(&instance, instanceFinalizer) {
-				phase = dbaasv1alpha1.InstancePhaseDeleting
+				phase = dbaasv1beta1.InstancePhaseDeleting
 				dbInstance := &rdsv1alpha1.DBInstance{}
 				if e := r.Get(ctx, client.ObjectKey{Namespace: instance.Spec.InventoryRef.Namespace, Name: instance.Name}, dbInstance); e != nil {
 					if !errors.IsNotFound(e) {
@@ -246,7 +244,7 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 					return true
 				}
 				logger.Info("Finalizer removed from Instance")
-				phase = dbaasv1alpha1.InstancePhaseDeleted
+				phase = dbaasv1beta1.InstancePhaseDeleted
 				returnNotReady(instanceStatusReasonUpdating, instanceStatusMessageUpdating)
 				return true
 			}
@@ -273,7 +271,16 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				returnError(e, instanceStatusReasonBackendError, e.Error())
 				return e
 			}
-			if e := r.setDBInstanceSpec(ctx, dbInstance, &instance); e != nil {
+
+			secret := &v1.Secret{}
+			if e := r.Get(ctx, client.ObjectKey{Namespace: inventory.Namespace,
+				Name: inventory.Spec.CredentialsRef.Name}, secret); e != nil {
+				logger.Error(e, "Failed to get Inventory credentials for setting spec of DB Instance")
+				returnError(e, instanceStatusReasonInputError, e.Error())
+				return e
+			}
+
+			if e := r.setDBInstanceSpec(ctx, dbInstance, &instance, secret); e != nil {
 				logger.Error(e, "Failed to set spec for DB Instance")
 				returnError(e, instanceStatusReasonInputError, e.Error())
 				return e
@@ -284,11 +291,11 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			returnError(e, "", instanceStatusMessageCreateOrUpdateError)
 			return true
 		} else if r == controllerutil.OperationResultCreated {
-			phase = dbaasv1alpha1.InstancePhaseCreating
+			phase = dbaasv1beta1.InstancePhaseCreating
 			returnRequeue(instanceStatusReasonCreating, instanceStatusMessageCreating)
 			return true
 		} else if r == controllerutil.OperationResultUpdated {
-			phase = dbaasv1alpha1.InstancePhaseUpdating
+			phase = dbaasv1beta1.InstancePhaseUpdating
 		}
 		return false
 	}
@@ -396,14 +403,14 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	switch instance.Status.Phase {
-	case dbaasv1alpha1.InstancePhaseReady:
+	case dbaasv1beta1.InstancePhaseReady:
 		returnReady()
-	case dbaasv1alpha1.InstancePhaseFailed, dbaasv1alpha1.InstancePhaseDeleted:
+	case dbaasv1beta1.InstancePhaseFailed, dbaasv1beta1.InstancePhaseDeleted:
 		returnNotReady(instanceStatusReasonTerminated, string(instance.Status.Phase))
-	case dbaasv1alpha1.InstancePhasePending, dbaasv1alpha1.InstancePhaseCreating,
-		dbaasv1alpha1.InstancePhaseUpdating, dbaasv1alpha1.InstancePhaseDeleting:
+	case dbaasv1beta1.InstancePhasePending, dbaasv1beta1.InstancePhaseCreating,
+		dbaasv1beta1.InstancePhaseUpdating, dbaasv1beta1.InstancePhaseDeleting:
 		returnUpdating()
-	case dbaasv1alpha1.InstancePhaseError, dbaasv1alpha1.InstancePhaseUnknown:
+	case dbaasv1beta1.InstancePhaseError, dbaasv1beta1.InstancePhaseUnknown:
 		returnRequeue(instanceStatusReasonBackendError, instanceStatusMessageError)
 	default:
 	}
@@ -411,38 +418,57 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	return
 }
 
-func (r *RDSInstanceReconciler) setDBInstanceSpec(ctx context.Context, dbInstance *rdsv1alpha1.DBInstance, rdsInstance *rdsdbaasv1alpha1.RDSInstance) error {
-	if len(rdsInstance.Spec.CloudRegion) > 0 {
-		dbInstance.Spec.AvailabilityZone = pointer.String(rdsInstance.Spec.CloudRegion)
+func (r *RDSInstanceReconciler) setDBInstanceSpec(ctx context.Context, dbInstance *rdsv1alpha1.DBInstance,
+	rdsInstance *rdsdbaasv1alpha1.RDSInstance, secret *v1.Secret) error {
+	if az, ok := rdsInstance.Spec.ProvisioningParameters[dbaasv1beta1.ProvisioningAvailabilityZones]; ok {
+		dbInstance.Spec.AvailabilityZone = pointer.String(az)
+	} else if region, ok := secret.Data[awsRegion]; ok {
+		az := getDefaultAvailabilityZone(string(region))
+		if az != nil {
+			dbInstance.Spec.AvailabilityZone = az
+		} else {
+			return fmt.Errorf(requiredParameterErrorTemplate, "AvailabilityZone")
+		}
 	} else {
 		dbInstance.Spec.AvailabilityZone = pointer.String(defaultAvailabilityZone)
 	}
 
-	if engine, ok := rdsInstance.Spec.OtherInstanceParams[engine]; ok {
+	if engine, ok := rdsInstance.Spec.ProvisioningParameters[dbaasv1beta1.ProvisioningDatabaseType]; ok {
 		dbInstance.Spec.Engine = pointer.String(engine)
 	} else {
 		return fmt.Errorf(requiredParameterErrorTemplate, "Engine")
 	}
 
-	if engineVersion, ok := rdsInstance.Spec.OtherInstanceParams[engineVersion]; ok {
+	if engineVersion, ok := rdsInstance.Spec.ProvisioningParameters[engineVersion]; ok {
 		dbInstance.Spec.EngineVersion = pointer.String(engineVersion)
+	} else {
+		dbInstance.Spec.EngineVersion = getDefaultEngineVersion(dbInstance.Spec.Engine)
 	}
 
 	if dbInstance.Spec.DBInstanceIdentifier == nil {
-		dbInstance.Spec.DBInstanceIdentifier = pointer.String(fmt.Sprintf("rhoda-%s%s", getDBEngineAbbreviation(dbInstance.Spec.Engine), string(uuid.NewUUID())))
+		if instanceID, ok := rdsInstance.Spec.ProvisioningParameters[dbaasv1beta1.ProvisioningName]; ok {
+			regex := regexp.MustCompile("^[a-zA-Z](-?[a-zA-Z0-9]+)*$")
+			if match := len(instanceID) <= 63 && regex.MatchString(instanceID); match {
+				dbInstance.Spec.DBInstanceIdentifier = pointer.String(instanceID)
+			} else {
+				return fmt.Errorf(invalidParameterErrorTemplate, "DBInstanceIdentifier")
+			}
+		} else {
+			dbInstance.Spec.DBInstanceIdentifier = pointer.String(fmt.Sprintf("rhoda-%s%s", getDBEngineAbbreviation(dbInstance.Spec.Engine), string(uuid.NewUUID())))
+		}
 	}
 
-	if dbInstanceClass, ok := rdsInstance.Spec.OtherInstanceParams[dbInstanceClass]; ok {
+	if dbInstanceClass, ok := rdsInstance.Spec.ProvisioningParameters[dbaasv1beta1.ProvisioningMachineType]; ok {
 		dbInstance.Spec.DBInstanceClass = pointer.String(dbInstanceClass)
 	} else {
 		dbInstance.Spec.DBInstanceClass = pointer.String(defaultDBInstanceClass)
 	}
 
-	if storageType, ok := rdsInstance.Spec.OtherInstanceParams[storageType]; ok {
+	if storageType, ok := rdsInstance.Spec.ProvisioningParameters[storageType]; ok {
 		dbInstance.Spec.StorageType = pointer.String(storageType)
 	}
 
-	if allocatedStorage, ok := rdsInstance.Spec.OtherInstanceParams[allocatedStorage]; ok {
+	if allocatedStorage, ok := rdsInstance.Spec.ProvisioningParameters[dbaasv1beta1.ProvisioningStorageGib]; ok {
 		if i, e := strconv.ParseInt(allocatedStorage, 10, 64); e != nil {
 			return fmt.Errorf(invalidParameterErrorTemplate, "AllocatedStorage")
 		} else {
@@ -452,7 +478,7 @@ func (r *RDSInstanceReconciler) setDBInstanceSpec(ctx context.Context, dbInstanc
 		dbInstance.Spec.AllocatedStorage = pointer.Int64(defaultAllocatedStorage)
 	}
 
-	if iops, ok := rdsInstance.Spec.OtherInstanceParams[iops]; ok {
+	if iops, ok := rdsInstance.Spec.ProvisioningParameters[iops]; ok {
 		if i, e := strconv.ParseInt(iops, 10, 64); e != nil {
 			return fmt.Errorf(invalidParameterErrorTemplate, "IOPS")
 		} else {
@@ -460,7 +486,7 @@ func (r *RDSInstanceReconciler) setDBInstanceSpec(ctx context.Context, dbInstanc
 		}
 	}
 
-	if maxAllocatedStorage, ok := rdsInstance.Spec.OtherInstanceParams[maxAllocatedStorage]; ok {
+	if maxAllocatedStorage, ok := rdsInstance.Spec.ProvisioningParameters[maxAllocatedStorage]; ok {
 		if i, e := strconv.ParseInt(maxAllocatedStorage, 10, 64); e != nil {
 			return fmt.Errorf(invalidParameterErrorTemplate, "MaxAllocatedStorage")
 		} else {
@@ -468,11 +494,11 @@ func (r *RDSInstanceReconciler) setDBInstanceSpec(ctx context.Context, dbInstanc
 		}
 	}
 
-	if dbSubnetGroupName, ok := rdsInstance.Spec.OtherInstanceParams[dbSubnetGroupName]; ok {
+	if dbSubnetGroupName, ok := rdsInstance.Spec.ProvisioningParameters[dbSubnetGroupName]; ok {
 		dbInstance.Spec.DBSubnetGroupName = pointer.String(dbSubnetGroupName)
 	}
 
-	if publiclyAccessible, ok := rdsInstance.Spec.OtherInstanceParams[publiclyAccessible]; ok {
+	if publiclyAccessible, ok := rdsInstance.Spec.ProvisioningParameters[publiclyAccessible]; ok {
 		if b, e := strconv.ParseBool(publiclyAccessible); e != nil {
 			return fmt.Errorf(invalidParameterErrorTemplate, "PubliclyAccessible")
 		} else {
@@ -482,7 +508,7 @@ func (r *RDSInstanceReconciler) setDBInstanceSpec(ctx context.Context, dbInstanc
 		dbInstance.Spec.PubliclyAccessible = pointer.Bool(defaultPubliclyAccessible)
 	}
 
-	if vpcSecurityGroupIDs, ok := rdsInstance.Spec.OtherInstanceParams[vpcSecurityGroupIDs]; ok {
+	if vpcSecurityGroupIDs, ok := rdsInstance.Spec.ProvisioningParameters[vpcSecurityGroupIDs]; ok {
 		sl := strings.Split(vpcSecurityGroupIDs, ",")
 		var sgs []*string
 		for _, s := range sl {
@@ -492,8 +518,13 @@ func (r *RDSInstanceReconciler) setDBInstanceSpec(ctx context.Context, dbInstanc
 		dbInstance.Spec.VPCSecurityGroupIDs = sgs
 	}
 
-	if licenseModel, ok := rdsInstance.Spec.OtherInstanceParams[licenseModel]; ok {
+	if licenseModel, ok := rdsInstance.Spec.ProvisioningParameters[licenseModel]; ok {
 		dbInstance.Spec.LicenseModel = pointer.String(licenseModel)
+	} else if dbInstance.Spec.Engine != nil {
+		switch *dbInstance.Spec.Engine {
+		case sqlserverEe, sqlserverSe, sqlserverEx, sqlserverWeb, oracleSe2, oracleSe2Cdb:
+			dbInstance.Spec.LicenseModel = pointer.String(defaultLicenseModel)
+		}
 	}
 
 	if _, e := setCredentials(ctx, r.Client, r.Scheme, dbInstance, rdsInstance.Namespace, rdsInstance, rdsInstance.Kind); e != nil {
@@ -567,7 +598,7 @@ func setCredentials(ctx context.Context, cli client.Client, scheme *runtime.Sche
 
 func createSecretLabels() map[string]string {
 	return map[string]string{
-		dbaasv1alpha1.TypeLabelKey: dbaasv1alpha1.TypeLabelValue,
+		dbaasv1beta1.TypeLabelKey: dbaasv1beta1.TypeLabelValue,
 	}
 }
 
@@ -592,24 +623,24 @@ func setDBInstancePhase(dbInstance *rdsv1alpha1.DBInstance, rdsInstance *rdsdbaa
 	}
 	switch status {
 	case "available":
-		rdsInstance.Status.Phase = dbaasv1alpha1.InstancePhaseReady
+		rdsInstance.Status.Phase = dbaasv1beta1.InstancePhaseReady
 	case "creating":
-		rdsInstance.Status.Phase = dbaasv1alpha1.InstancePhaseCreating
+		rdsInstance.Status.Phase = dbaasv1beta1.InstancePhaseCreating
 	case "deleting":
-		rdsInstance.Status.Phase = dbaasv1alpha1.InstancePhaseDeleting
+		rdsInstance.Status.Phase = dbaasv1beta1.InstancePhaseDeleting
 	case "failed":
-		rdsInstance.Status.Phase = dbaasv1alpha1.InstancePhaseFailed
+		rdsInstance.Status.Phase = dbaasv1beta1.InstancePhaseFailed
 	case "inaccessible-encryption-credentials-recoverable", "incompatible-parameters", "restore-error":
-		rdsInstance.Status.Phase = dbaasv1alpha1.InstancePhaseError
+		rdsInstance.Status.Phase = dbaasv1beta1.InstancePhaseError
 	case "backing-up", "configuring-enhanced-monitoring", "configuring-iam-database-auth", "configuring-log-exports",
 		"converting-to-vpc", "maintenance", "modifying", "moving-to-vpc", "rebooting", "resetting-master-credentials",
 		"renaming", "starting", "stopping", "storage-optimization", "upgrading":
-		rdsInstance.Status.Phase = dbaasv1alpha1.InstancePhaseUpdating
+		rdsInstance.Status.Phase = dbaasv1beta1.InstancePhaseUpdating
 	case "inaccessible-encryption-credentials", "incompatible-network", "incompatible-option-group", "incompatible-restore",
 		"insufficient-capacity", "stopped", "storage-full":
-		rdsInstance.Status.Phase = dbaasv1alpha1.InstancePhaseUnknown
+		rdsInstance.Status.Phase = dbaasv1beta1.InstancePhaseUnknown
 	default:
-		rdsInstance.Status.Phase = dbaasv1alpha1.InstancePhaseUnknown
+		rdsInstance.Status.Phase = dbaasv1beta1.InstancePhaseUnknown
 	}
 }
 
