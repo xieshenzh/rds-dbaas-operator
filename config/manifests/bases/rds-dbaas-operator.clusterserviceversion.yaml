@@ -10,7 +10,7 @@ metadata:
     operatorframework.io/suggested-namespace: openshift-dbaas-operator
     operators.operatorframework.io/internal-objects: '["rdsconnections.dbaas.redhat.com","rdsinstances.dbaas.redhat.com","rdsinventories.dbaas.redhat.com"]'
     repository: https://github.com/RHEcosystemAppEng/rds-dbaas-operator
-    support: dbaas-alpha-support@redhat.com
+    support: rhoda-requests@redhat.com
   name: rds-dbaas-operator.v0.0.0
   namespace: placeholder
 spec:
@@ -57,8 +57,8 @@ spec:
   - name: GitHub
     url: https://github.com/RHEcosystemAppEng/rds-dbaas-operator
   maintainers:
-  - email: ecosystem-appeng@redhat.com
-    name: Red Hat Ecosystem App Engineering
+  - email: rhoda-requests@redhat.com
+    name: RHODA Team
   maturity: alpha
   provider:
     name: Red Hat
