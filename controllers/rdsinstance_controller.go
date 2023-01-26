@@ -649,6 +649,9 @@ func parseDBInstanceStatus(dbInstance *rdsv1alpha1.DBInstance) map[string]string
 	if dbInstance.Status.ActivityStreamMode != nil {
 		instanceStatus["activityStreamMode"] = *dbInstance.Status.ActivityStreamMode
 	}
+	if dbInstance.Status.ActivityStreamPolicyStatus != nil {
+		instanceStatus["activityStreamPolicyStatus"] = *dbInstance.Status.ActivityStreamPolicyStatus
+	}
 	if dbInstance.Status.ActivityStreamStatus != nil {
 		instanceStatus["activityStreamStatus"] = *dbInstance.Status.ActivityStreamStatus
 	}
@@ -922,16 +925,6 @@ func parseDBInstanceStatus(dbInstance *rdsv1alpha1.DBInstance) map[string]string
 			}
 			if info.StatusType != nil {
 				instanceStatus[fmt.Sprintf("statusInfos[%d].statusType", i)] = *info.StatusType
-			}
-		}
-	}
-	if dbInstance.Status.TagList != nil {
-		for i, l := range dbInstance.Status.TagList {
-			if l.Key != nil {
-				instanceStatus[fmt.Sprintf("tagList[%d].key", i)] = *l.Key
-			}
-			if l.Value != nil {
-				instanceStatus[fmt.Sprintf("tagList[%d].value", i)] = *l.Value
 			}
 		}
 	}

@@ -847,11 +847,12 @@ var _ = Describe("RDSInventoryController", func() {
 							}
 							ak, akOk := rdsSecret.Data["AWS_ACCESS_KEY_ID"]
 							Expect(akOk).Should(BeTrue())
-							Expect(ak).Should(Equal([]byte(accessKey)))
+							if string(ak) != accessKey {
+								return false
+							}
 							sk, skOk := rdsSecret.Data["AWS_SECRET_ACCESS_KEY"]
 							Expect(skOk).Should(BeTrue())
-							Expect(sk).Should(Equal([]byte(secretKey)))
-							return true
+							return string(sk) == secretKey
 						}, timeout).Should(BeTrue())
 
 						By("checking if the ConfigMap for RDS controller is created")
@@ -867,8 +868,7 @@ var _ = Describe("RDSInventoryController", func() {
 							}
 							r, ok := rdsConfigMap.Data["AWS_REGION"]
 							Expect(ok).Should(BeTrue())
-							Expect(r).Should(Equal(region))
-							return true
+							return r == region
 						}, timeout).Should(BeTrue())
 
 						By("checking if the RDS controller is started")
@@ -1763,7 +1763,7 @@ var _ = Describe("RDSInventoryController", func() {
 				It("should delete the owned resources and stop the RDS controller", func() {
 					assertResourceDeletion(inventoryDelete)()
 
-					By("checking if the Secret for RDS controller is deleted")
+					By("checking if the Secret for RDS controller is reset")
 					rdsSecret := &v1.Secret{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "ack-rds-user-secrets",
@@ -1772,14 +1772,19 @@ var _ = Describe("RDSInventoryController", func() {
 					}
 					Eventually(func() bool {
 						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rdsSecret), rdsSecret); err != nil {
-							if errors.IsNotFound(err) {
-								return true
-							}
+							return false
 						}
-						return false
+						ak, akOk := rdsSecret.Data["AWS_ACCESS_KEY_ID"]
+						Expect(akOk).Should(BeTrue())
+						if string(ak) != "dummy" {
+							return false
+						}
+						sk, skOk := rdsSecret.Data["AWS_SECRET_ACCESS_KEY"]
+						Expect(skOk).Should(BeTrue())
+						return string(sk) == "dummy"
 					}, timeout).Should(BeTrue())
 
-					By("checking if the ConfigMap for RDS controller is deleted")
+					By("checking if the ConfigMap for RDS controller is reset")
 					rdsConfigMap := &v1.ConfigMap{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "ack-rds-user-config",
@@ -1788,11 +1793,11 @@ var _ = Describe("RDSInventoryController", func() {
 					}
 					Eventually(func() bool {
 						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rdsConfigMap), rdsConfigMap); err != nil {
-							if errors.IsNotFound(err) {
-								return true
-							}
+							return false
 						}
-						return false
+						r, ok := rdsConfigMap.Data["AWS_REGION"]
+						Expect(ok).Should(BeTrue())
+						return r == "dummy"
 					}, timeout).Should(BeTrue())
 
 					By("checking if the RDS controller is stopped")
@@ -1851,11 +1856,12 @@ var _ = Describe("RDSInventoryController", func() {
 					}
 					ak, akOk := rdsSecret.Data["AWS_ACCESS_KEY_ID"]
 					Expect(akOk).Should(BeTrue())
-					Expect(ak).Should(Equal([]byte(accessKey)))
+					if string(ak) != accessKey {
+						return false
+					}
 					sk, skOk := rdsSecret.Data["AWS_SECRET_ACCESS_KEY"]
 					Expect(skOk).Should(BeTrue())
-					Expect(sk).Should(Equal([]byte(secretKey)))
-					return true
+					return string(sk) == secretKey
 				}, timeout).Should(BeTrue())
 
 				By("checking if the ConfigMap for RDS controller is created")
@@ -1871,8 +1877,7 @@ var _ = Describe("RDSInventoryController", func() {
 					}
 					r, ok := rdsConfigMap.Data["AWS_REGION"]
 					Expect(ok).Should(BeTrue())
-					Expect(r).Should(Equal(region))
-					return true
+					return r == region
 				}, timeout).Should(BeTrue())
 
 				By("checking if the RDS controller is started")
@@ -2006,11 +2011,12 @@ var _ = Describe("RDSInventoryController", func() {
 					}
 					ak, akOk := rdsSecret.Data["AWS_ACCESS_KEY_ID"]
 					Expect(akOk).Should(BeTrue())
-					Expect(ak).Should(Equal([]byte(accessKey)))
+					if string(ak) != accessKey {
+						return false
+					}
 					sk, skOk := rdsSecret.Data["AWS_SECRET_ACCESS_KEY"]
 					Expect(skOk).Should(BeTrue())
-					Expect(sk).Should(Equal([]byte(secretKey)))
-					return true
+					return string(sk) == secretKey
 				}, timeout).Should(BeTrue())
 
 				By("checking if the ConfigMap for RDS controller is created")
@@ -2026,8 +2032,7 @@ var _ = Describe("RDSInventoryController", func() {
 					}
 					r, ok := rdsConfigMap.Data["AWS_REGION"]
 					Expect(ok).Should(BeTrue())
-					Expect(r).Should(Equal(region))
-					return true
+					return r == region
 				}, timeout).Should(BeTrue())
 
 				By("checking if the RDS controller is started")

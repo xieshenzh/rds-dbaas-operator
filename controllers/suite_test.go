@@ -217,6 +217,33 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(*rdsDeployment.Spec.Replicas).Should(BeZero())
 
+	rdsSecret := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ack-rds-user-secrets",
+			Namespace: testNamespace,
+		},
+	}
+	err = k8sClient.Get(ctx, client.ObjectKeyFromObject(rdsSecret), rdsSecret)
+	Expect(err).NotTo(HaveOccurred())
+	ak, akOk := rdsSecret.Data["AWS_ACCESS_KEY_ID"]
+	Expect(akOk).Should(BeTrue())
+	Expect(string(ak)).Should(Equal("dummy"))
+	sk, skOk := rdsSecret.Data["AWS_SECRET_ACCESS_KEY"]
+	Expect(skOk).Should(BeTrue())
+	Expect(string(sk)).Should(Equal("dummy"))
+
+	rdsConfigMap := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ack-rds-user-config",
+			Namespace: testNamespace,
+		},
+	}
+	err = k8sClient.Get(ctx, client.ObjectKeyFromObject(rdsConfigMap), rdsConfigMap)
+	Expect(err).NotTo(HaveOccurred())
+	r, ok := rdsConfigMap.Data["AWS_REGION"]
+	Expect(ok).Should(BeTrue())
+	Expect(r).Should(Equal("dummy"))
+
 	adoptedresourcesCRD := &apiextensionsv1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "adoptedresources.services.k8s.aws",

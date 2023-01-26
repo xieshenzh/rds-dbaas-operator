@@ -5,16 +5,16 @@ CONTAINER_ENGINE?=docker
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
-VERSION ?= 0.2.0
+VERSION ?= 0.3.0
 
-RDS_VERSION ?= 0.0.27
+RDS_VERSION ?= 0.1.2
 
 # QUAY_ORG indicates the organization that docker images will be build for & pushed to
 # CHANGE THIS TO YOUR OWN QUAY USERNAME FOR DEV/TESTING/PUSHING
 ORG ?= ecosystem-appeng
 
 # CATALOG_BASE_IMG defines an existing catalog version to build on & add bundles to
-CATALOG_BASE_IMG ?= quay.io/ecosystem-appeng/rds-dbaas-operator-catalog:v0.1.0
+CATALOG_BASE_IMG ?= quay.io/ecosystem-appeng/rds-dbaas-operator-catalog:v0.2.0
 
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "candidate,fast,stable")
