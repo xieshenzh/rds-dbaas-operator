@@ -18,10 +18,8 @@ package controllers
 
 import (
 	"context"
-	"encoding/json"
+	_ "embed"
 	"fmt"
-	"io/ioutil"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -34,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
-	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -68,18 +65,10 @@ const (
 	ackWatchNamespace           = "ACK_WATCH_NAMESPACE"
 	awsEndpointUrl              = "AWS_ENDPOINT_URL"
 
-	awsAccessKeyIDHelpText     = "The AWS Access Key ID is the value associated with a user's security credentials within the IAM console."
-	awsSecretAccessKeyHelpText = "The AWS Secret Access Key is the value associated with a user's security credentials within the IAM console."
-	awsRegionHelpText          = "The geographical region where your AWS resources reside."
-	ackResourceTagsHelpText    = "Optionally, you can set key:value pair tags on resources managed by the service controller."
-	ackLogLevelHelpText        = "Optionally, you can set the logging level on the RDS controller for OpenShift Database Access. The default value is \"info\". The only valid values are \"info\", and \"debug\"."
-
 	secretName    = "ack-rds-user-secrets" //#nosec G101
 	configmapName = "ack-rds-user-config"
 
-	adoptedResourceCRDFile = "services.k8s.aws_adoptedresources.yaml"
-	fieldExportCRDFile     = "services.k8s.aws_fieldexports.yaml"
-	ackDeploymentName      = "ack-rds-controller"
+	ackDeploymentName = "ack-rds-controller"
 
 	adoptedDBResourceLabelKey   = "rds.dbaas.redhat.com/adopted"
 	adoptedDBResourceLabelValue = "true"
@@ -111,6 +100,12 @@ const (
 	requiredCredentialErrorTemplate = "required credential %s is missing"
 )
 
+//go:embed yaml/rds/common/bases/services.k8s.aws_adoptedresources.yaml
+var adoptedResourceCRDYaml []byte
+
+//go:embed yaml/rds/common/bases/services.k8s.aws_fieldexports.yaml
+var fieldExportCRDYaml []byte
+
 // RDSInventoryReconciler reconciles a RDSInventory object
 type RDSInventoryReconciler struct {
 	client.Client
@@ -122,7 +117,6 @@ type RDSInventoryReconciler struct {
 	GetModifyDBClusterAPI              func(accessKey, secretKey, region string) controllersrds.ModifyDBClusterAPI
 	GetDescribeDBClustersAPI           func(accessKey, secretKey, region string) controllersrds.DescribeDBClustersAPI
 	ACKInstallNamespace                string
-	RDSCRDFilePath                     string
 	WaitForRDSControllerRetries        int
 	WaitForRDSControllerInterval       time.Duration
 }
@@ -1102,9 +1096,9 @@ func (r *RDSInventoryReconciler) buildDBaaSAnnotations(obj *metav1.ObjectMeta) m
 	return annotations
 }
 
-func (r *RDSInventoryReconciler) installCRD(ctx context.Context, cli client.Client, file string) error {
-	crd, err := r.readCRDFile(file)
-	if err != nil {
+func (r *RDSInventoryReconciler) installCRD(ctx context.Context, cli client.Client, file []byte) error {
+	crd := &apiextensionsv1.CustomResourceDefinition{}
+	if err := unmarshalYaml(file, crd); err != nil {
 		return err
 	}
 	c := &apiextensionsv1.CustomResourceDefinition{
@@ -1119,23 +1113,6 @@ func (r *RDSInventoryReconciler) installCRD(ctx context.Context, cli client.Clie
 		return err
 	}
 	return nil
-}
-
-func (r *RDSInventoryReconciler) readCRDFile(file string) (*apiextensionsv1.CustomResourceDefinition, error) {
-	d, err := ioutil.ReadFile(filepath.Clean(file))
-	if err != nil {
-		return nil, err
-	}
-	jsonData, err := yaml.ToJSON(d)
-	if err != nil {
-		return nil, err
-	}
-	csv := &apiextensionsv1.CustomResourceDefinition{}
-	if err := json.Unmarshal(jsonData, csv); err != nil {
-		return nil, err
-	}
-
-	return csv, nil
 }
 
 func (r *RDSInventoryReconciler) waitForRDSController(ctx context.Context) (bool, error) {
@@ -1243,10 +1220,10 @@ func (r *RDSInventoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 
-	if err := r.installCRD(ctx, cli, filepath.Join(r.RDSCRDFilePath, adoptedResourceCRDFile)); err != nil {
+	if err := r.installCRD(ctx, cli, adoptedResourceCRDYaml); err != nil {
 		return err
 	}
-	if err := r.installCRD(ctx, cli, filepath.Join(r.RDSCRDFilePath, fieldExportCRDFile)); err != nil {
+	if err := r.installCRD(ctx, cli, fieldExportCRDYaml); err != nil {
 		return err
 	}
 
