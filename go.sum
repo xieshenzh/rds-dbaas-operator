@@ -141,8 +141,8 @@ github.com/PuerkitoBio/purell v1.1.1/go.mod h1:c11w/QuzBsJSee3cPx9rAFu61PvFxuPbt
 github.com/PuerkitoBio/urlesc v0.0.0-20160726150825-5bd2802263f2/go.mod h1:uGdkoq3SwY9Y+13GIhn11/XLaGBb4BfwItxLd5jeuXE=
 github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 h1:d+Bc7a5rLufV/sSk/8dngufqelfh6jnri85riMAaF/M=
 github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578/go.mod h1:uGdkoq3SwY9Y+13GIhn11/XLaGBb4BfwItxLd5jeuXE=
-github.com/RHEcosystemAppEng/dbaas-operator v1.0.1-0.20230127171554-fb0644f3bd7c h1:lZnbzbkPXtPyTF0tW2T+DGLOFuJqjQTl4VwDC5HNEns=
-github.com/RHEcosystemAppEng/dbaas-operator v1.0.1-0.20230127171554-fb0644f3bd7c/go.mod h1:2NkF+5atGkciny6CAgUHJ8ozji6LOTGn/2I1pHikLMY=
+github.com/RHEcosystemAppEng/dbaas-operator v1.0.1-0.20230131163031-c885e0ae8850 h1:yQUsdb015DRss0mRaFS8Jvp4vfTVZmj4bel0KRb5VWI=
+github.com/RHEcosystemAppEng/dbaas-operator v1.0.1-0.20230131163031-c885e0ae8850/go.mod h1:2NkF+5atGkciny6CAgUHJ8ozji6LOTGn/2I1pHikLMY=
 github.com/SAP/go-hdb v0.14.1/go.mod h1:7fdQLVC2lER3urZLjZCm0AuMQfApof92n3aylBPEkMo=
 github.com/Shopify/logrus-bugsnag v0.0.0-20171204204709-577dee27f20d/go.mod h1:HI8ITrYtUY+O+ZhtlqUnD8+KwNPOyugEhfP9fdUIaEQ=
 github.com/Shopify/sarama v1.19.0/go.mod h1:FVkBWblsNy7DGZRfXLU0O9RCGt5g3g3yEuWXgklEdEo=

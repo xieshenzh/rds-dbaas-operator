@@ -100,7 +100,7 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	var inventory rdsdbaasv1alpha1.RDSInventory
 	var dbService client.Object
 
-	var password *ackv1alpha1.SecretKeyReference
+	var passwordSecret *ackv1alpha1.SecretKeyReference
 	var username *string
 	var host *string
 	var port *int64
@@ -229,14 +229,14 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		switch s := dbService.(type) {
 		case *rdsv1alpha1.DBCluster:
 			engine = s.Spec.Engine
-			password = s.Spec.MasterUserPassword
+			passwordSecret = s.Spec.MasterUserPassword
 			username = s.Spec.MasterUsername
 			host = s.Status.Endpoint
 			port = s.Spec.Port
 			dbName = s.Spec.DatabaseName
 		case *rdsv1alpha1.DBInstance:
 			engine = s.Spec.Engine
-			password = s.Spec.MasterUserPassword
+			passwordSecret = s.Spec.MasterUserPassword
 			username = s.Spec.MasterUsername
 			if s.Status.Endpoint != nil {
 				host = s.Status.Endpoint.Address
@@ -248,14 +248,14 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			dbName = s.Spec.DBName
 		}
 
-		if password == nil {
+		if passwordSecret == nil {
 			e := fmt.Errorf("service %s master password not set", connection.Spec.DatabaseServiceID)
 			logger.Error(e, "DB Service master password not set")
 			returnError(e, connectionStatusReasonInputError, connectionStatusMessagePasswordNotFound)
 			return true
 		}
 
-		if e := r.Get(ctx, client.ObjectKey{Namespace: password.Namespace, Name: password.Name}, &masterUserSecret); e != nil {
+		if e := r.Get(ctx, client.ObjectKey{Namespace: passwordSecret.Namespace, Name: passwordSecret.Name}, &masterUserSecret); e != nil {
 			logger.Error(e, "Failed to get secret for DB Service master password")
 			if errors.IsNotFound(e) {
 				returnError(e, connectionStatusReasonNotFound, connectionStatusMessageGetPasswordError)
@@ -264,7 +264,7 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			}
 			return true
 		}
-		if v, ok := masterUserSecret.Data[password.Key]; !ok || len(v) == 0 {
+		if v, ok := masterUserSecret.Data[passwordSecret.Key]; !ok || len(v) == 0 {
 			e := fmt.Errorf("service %s master password key not set", connection.Spec.DatabaseServiceID)
 			logger.Error(e, "DB Service master password key not set")
 			returnError(e, connectionStatusReasonInputError, connectionStatusMessagePasswordInvalid)
@@ -287,7 +287,7 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	syncConnectionStatus := func() bool {
-		userSecret, e := r.createOrUpdateSecret(ctx, &connection, username, masterUserSecret.Data[password.Key])
+		userSecret, e := r.createOrUpdateSecret(ctx, &connection, username, masterUserSecret.Data[passwordSecret.Key])
 		if e != nil {
 			logger.Error(e, "Failed to create or update secret for Connection")
 			returnError(e, connectionStatusReasonBackendError, connectionStatusMessageSecretError)

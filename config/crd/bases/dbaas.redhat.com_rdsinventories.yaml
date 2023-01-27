@@ -33,8 +33,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: DBaaSInventorySpec defines the Inventory Spec to be used
-              by provider operators
+            description: Defines the inventory specifications for the provider's operators.
             properties:
               credentialsRef:
                 description: The secret containing the provider-specific connection
