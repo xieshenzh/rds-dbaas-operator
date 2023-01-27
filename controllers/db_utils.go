@@ -44,6 +44,12 @@ const (
 	customSqlserverSe  = "custom-sqlserver-se"
 	customSqlserverWeb = "custom-sqlserver-web"
 
+	postgresEngineVersion  = "13.7"
+	sqlserverEngineVersion = "15.00.4236.7.v1"
+	oracleEngineVersion    = "19.0.0.0.ru-2022-10.rur-2022-10.r1"
+	mysqlEngineVersion     = "8.0.28"
+	mariadbEngineVersion   = "10.6.10"
+
 	digits   = "0123456789"
 	specials = "~=+%^*()[]{}!#$?|"
 	letter   = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -258,15 +264,15 @@ func getDefaultEngineVersion(engine *string) *string {
 
 	switch *engine {
 	case postgres:
-		return pointer.String("13.7")
+		return pointer.String(postgresEngineVersion)
 	case sqlserverEe, sqlserverSe, sqlserverEx, sqlserverWeb:
-		return pointer.String("15.00.4236.7.v1")
+		return pointer.String(sqlserverEngineVersion)
 	case oracleSe2, oracleSe2Cdb:
-		return pointer.String("19.0.0.0.ru-2022-10.rur-2022-10.r1")
+		return pointer.String(oracleEngineVersion)
 	case mysql:
-		return pointer.String("8.0.28")
+		return pointer.String(mysqlEngineVersion)
 	case mariadb:
-		return pointer.String("10.6.10")
+		return pointer.String(mariadbEngineVersion)
 	default:
 		return nil
 	}

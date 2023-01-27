@@ -178,9 +178,10 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 
 	providerReconciler := &controllers.DBaaSProviderReconciler{
-		Client:    mgr.GetClient(),
-		Scheme:    mgr.GetScheme(),
-		Clientset: clientset,
+		Client:                  mgr.GetClient(),
+		Scheme:                  mgr.GetScheme(),
+		Clientset:               clientset,
+		DBaaSProviderCRFilePath: filepath.Join("..", "rds", "dbaas", "dbaasprovider"),
 	}
 	err = providerReconciler.SetupWithManager(mgr)
 	Expect(err).ToNot(HaveOccurred())
