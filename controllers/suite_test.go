@@ -144,7 +144,7 @@ var _ = BeforeSuite(func() {
 			Namespace: testNamespace,
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: pointer.Int32Ptr(1),
+			Replicas: pointer.Int32(1),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"name": "ack-rds-controller",
@@ -178,10 +178,9 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 
 	providerReconciler := &controllers.DBaaSProviderReconciler{
-		Client:                  mgr.GetClient(),
-		Scheme:                  mgr.GetScheme(),
-		Clientset:               clientset,
-		DBaaSProviderCRFilePath: filepath.Join("..", "rds", "dbaas", "dbaasprovider"),
+		Client:    mgr.GetClient(),
+		Scheme:    mgr.GetScheme(),
+		Clientset: clientset,
 	}
 	err = providerReconciler.SetupWithManager(mgr)
 	Expect(err).ToNot(HaveOccurred())
@@ -196,7 +195,6 @@ var _ = BeforeSuite(func() {
 		GetModifyDBClusterAPI:              controllersrdstest.NewModifyDBCluster,
 		GetDescribeDBClustersAPI:           controllersrdstest.NewDescribeDBClusters,
 		ACKInstallNamespace:                testNamespace,
-		RDSCRDFilePath:                     filepath.Join("..", "rds", "config", "common", "bases"),
 		WaitForRDSControllerRetries:        10,
 		WaitForRDSControllerInterval:       30 * time.Second,
 	}

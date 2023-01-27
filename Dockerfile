@@ -13,11 +13,6 @@ COPY main.go main.go
 COPY api/ api/
 COPY controllers/ controllers/
 
-# Copy the RDS CRDs
-COPY rds/config/common/bases/ crds/
-# Copy the DBaaS CRs
-COPY rds/dbaas/dbaasprovider crs/
-
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager main.go
 
@@ -27,8 +22,6 @@ FROM registry.access.redhat.com/ubi8-minimal:8.7
 COPY LICENSE /licenses/LICENSE
 WORKDIR /
 COPY --from=builder /opt/app-root/src/manager .
-COPY --from=builder /opt/app-root/src/crds/* ./
-COPY --from=builder /opt/app-root/src/crs/* ./
 USER 65532:65532
 
 ENTRYPOINT ["/manager"]

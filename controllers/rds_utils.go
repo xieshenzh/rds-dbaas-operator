@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -697,4 +698,11 @@ func parseDBClusterStatus(dbCluster *rdsv1alpha1.DBCluster) map[string]string {
 		}
 	}
 	return clusterStatus
+}
+
+func unmarshalYaml(file []byte, obj interface{}) error {
+	if err := yaml.Unmarshal(file, obj); err != nil {
+		return err
+	}
+	return nil
 }

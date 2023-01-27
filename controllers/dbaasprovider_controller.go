@@ -18,11 +18,9 @@ package controllers
 
 import (
 	"context"
-	"encoding/json"
+	_ "embed"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"time"
 
 	v1 "k8s.io/api/apps/v1"
@@ -32,7 +30,6 @@ import (
 	label "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/pointer"
@@ -55,9 +52,10 @@ const (
 	relatedToLabelValue = "dbaas-operator"
 	typeLabelName       = "type"
 	typeLabelValue      = "dbaas-provider-registration"
-
-	dbaasproviderCRFile = "rds_registration.yaml"
 )
+
+//go:embed yaml/dbaas/dbaasprovider/rds_registration.yaml
+var dbaasproviderCRYaml []byte
 
 var labels = map[string]string{relatedToLabelName: relatedToLabelValue, typeLabelName: typeLabelValue}
 
@@ -65,7 +63,6 @@ type DBaaSProviderReconciler struct {
 	client.Client
 	*runtime.Scheme
 	Clientset                *kubernetes.Clientset
-	DBaaSProviderCRFilePath  string
 	operatorNameVersion      string
 	operatorInstallNamespace string
 }
@@ -130,8 +127,8 @@ func (r *DBaaSProviderReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		},
 	}
 	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, instance, func() error {
-		provider, err := readProviderCRFile(filepath.Join(r.DBaaSProviderCRFilePath, dbaasproviderCRFile))
-		if err != nil {
+		provider := &dbaasoperator.DBaaSProvider{}
+		if err := unmarshalYaml(dbaasproviderCRYaml, provider); err != nil {
 			return err
 		}
 		bridgeProviderCR(instance, provider, clusterRoleList)
@@ -155,29 +152,12 @@ func bridgeProviderCR(instance *dbaasoperator.DBaaSProvider, provider *dbaasoper
 			Kind:               "ClusterRole",
 			UID:                clusterRoleList.Items[0].GetUID(),
 			Name:               clusterRoleList.Items[0].Name,
-			Controller:         pointer.BoolPtr(true),
-			BlockOwnerDeletion: pointer.BoolPtr(false),
+			Controller:         pointer.Bool(true),
+			BlockOwnerDeletion: pointer.Bool(false),
 		},
 	}
 	instance.ObjectMeta.Labels = labels
 	instance.Spec = provider.Spec
-}
-
-func readProviderCRFile(file string) (*dbaasoperator.DBaaSProvider, error) {
-	d, err := ioutil.ReadFile(filepath.Clean(file))
-	if err != nil {
-		return nil, err
-	}
-	jsonData, err := yaml.ToJSON(d)
-	if err != nil {
-		return nil, err
-	}
-	provider := &dbaasoperator.DBaaSProvider{}
-	if err := json.Unmarshal(jsonData, provider); err != nil {
-		return nil, err
-	}
-
-	return provider, nil
 }
 
 // CheckCrdInstalled checks whether dbaas provider CRD, has been created yet

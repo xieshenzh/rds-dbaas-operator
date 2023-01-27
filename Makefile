@@ -265,16 +265,16 @@ catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
 
 .PHONY: rds-crds-update
-RDS_TEMP = ./rds/temp
-RDS_CONFIG = ./rds/config
+RDS_TEMP = ./controllers/yaml/temp
+RDS_CONFIG = ./controllers/yaml/rds
 rds-crds-update: ## Download and update the additional RDS CRDs for extra RDS features.
 	mkdir -p $(dir $(RDS_TEMP))
 	curl -sSLo $(RDS_TEMP)/v$(RDS_VERSION).zip https://github.com/aws-controllers-k8s/rds-controller/archive/refs/tags/v$(RDS_VERSION).zip
 	unzip -o -q -j $(RDS_TEMP)/v$(RDS_VERSION).zip "rds-controller-$(RDS_VERSION)/config/crd/common/bases/*" -d "$(RDS_CONFIG)/common/bases/"
 
 .PHONY: rds-crds-clean
-RDS_TEMP = ./rds/temp
-RDS_CONFIG = ./rds/config
+RDS_TEMP = ./controllers/yaml/temp
+RDS_CONFIG = ./controllers/yaml/rds
 rds-crds-clean: ## Cleanup the RDS CRD files.
 	find $(RDS_CONFIG) -type f -delete
 	rm $(RDS_TEMP)/v$(RDS_VERSION).zip
