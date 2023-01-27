@@ -7,11 +7,12 @@ spec:
   inventoryRef:
     name: rdsinventory-sample
     namespace: rds-sample
-  name: rds-instance-sample
-  cloudProvider: AWS
-  cloudRegion: us-east-1a
-  otherInstanceParams:
-    Engine: postgres
-    DBInstanceIdentifier: rds-instance-sample
-    DBInstanceClass: "db.t3.micro"
-    AllocatedStorage: "20"
+  provisioningParameters:
+    name: rds-instance-sample
+    plan: DEDICATED
+    cloudProvider: AWS
+    databaseType: postgres
+    availabilityZones: us-east-1a
+    machineType: db.t3.micro
+    storageGib: "20"
+

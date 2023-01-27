@@ -41,7 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
+	dbaasv1beta1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1beta1"
 	rdsdbaasv1alpha1 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
 	"github.com/RHEcosystemAppEng/rds-dbaas-operator/controllers"
 	controllersrds "github.com/RHEcosystemAppEng/rds-dbaas-operator/controllers/rds"
@@ -63,7 +63,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(rdsdbaasv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(dbaasv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(dbaasv1beta1.AddToScheme(scheme))
 	utilruntime.Must(rdsv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(ackv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(appsv1.AddToScheme(scheme))
@@ -117,12 +117,12 @@ func main() {
 			SelectorsByObject: cache.SelectorsByObject{
 				&v1.Secret{}: {
 					Label: labels.SelectorFromSet(labels.Set{
-						dbaasv1alpha1.TypeLabelKey: dbaasv1alpha1.TypeLabelValue,
+						dbaasv1beta1.TypeLabelKey: dbaasv1beta1.TypeLabelValue,
 					}),
 				},
 				&v1.ConfigMap{}: {
 					Label: labels.SelectorFromSet(labels.Set{
-						dbaasv1alpha1.TypeLabelKey: dbaasv1alpha1.TypeLabelValue,
+						dbaasv1beta1.TypeLabelKey: dbaasv1beta1.TypeLabelValue,
 					}),
 				},
 			},

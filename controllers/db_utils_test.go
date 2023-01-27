@@ -117,7 +117,7 @@ var _ = Describe("DbUtils", func() {
 		)
 	})
 
-	Context("Generate Default DB Name", func() {
+	Context("Get Default DB Name", func() {
 		DescribeTable("checking getDefaultDBName",
 			func(engine string, dbName *string) {
 				n := getDefaultDBName(engine)
@@ -147,6 +147,84 @@ var _ = Describe("DbUtils", func() {
 			Entry("custom-sqlserver-se", "custom-sqlserver-se", pointer.String("master")),
 			Entry("custom-sqlserver-web", "custom-sqlserver-web", pointer.String("master")),
 			Entry("Invalid", "invalid", nil),
+		)
+	})
+
+	Context("Get Default Engine Version", func() {
+		DescribeTable("checking getDefaultEngineVersion",
+			func(engine *string, version *string) {
+				v := getDefaultEngineVersion(engine)
+				if version == nil {
+					Expect(v).Should(BeNil())
+				} else {
+					Expect(*v).Should(Equal(*version))
+				}
+			},
+
+			Entry("aurora", pointer.String("aurora"), nil),
+			Entry("aurora-mysql", pointer.String("aurora-mysql"), nil),
+			Entry("aurora-postgresql", pointer.String("aurora-postgresql"), nil),
+			Entry("custom-oracle-ee", pointer.String("custom-oracle-ee"), nil),
+			Entry("mariadb", pointer.String("mariadb"), pointer.String("10.6.10")),
+			Entry("mysql", pointer.String("mysql"), pointer.String("8.0.28")),
+			Entry("oracle-ee", pointer.String("oracle-ee"), nil),
+			Entry("oracle-ee-cdb", pointer.String("oracle-ee-cdb"), nil),
+			Entry("oracle-se2", pointer.String("oracle-se2"), pointer.String("19.0.0.0.ru-2022-10.rur-2022-10.r1")),
+			Entry("oracle-se2-cdb", pointer.String("oracle-se2-cdb"), pointer.String("19.0.0.0.ru-2022-10.rur-2022-10.r1")),
+			Entry("postgres", pointer.String("postgres"), pointer.String("13.7")),
+			Entry("sqlserver-ee", pointer.String("sqlserver-ee"), pointer.String("15.00.4236.7.v1")),
+			Entry("sqlserver-se", pointer.String("sqlserver-se"), pointer.String("15.00.4236.7.v1")),
+			Entry("sqlserver-ex", pointer.String("sqlserver-ex"), pointer.String("15.00.4236.7.v1")),
+			Entry("sqlserver-web", pointer.String("sqlserver-web"), pointer.String("15.00.4236.7.v1")),
+			Entry("custom-sqlserver-ee", pointer.String("custom-sqlserver-ee"), nil),
+			Entry("custom-sqlserver-se", pointer.String("custom-sqlserver-se"), nil),
+			Entry("custom-sqlserver-web", pointer.String("custom-sqlserver-web"), nil),
+			Entry("Invalid", pointer.String("invalid"), nil),
+			Entry("nil", nil, nil),
+		)
+	})
+
+	Context("Get Default Availability Zone", func() {
+		DescribeTable("checking getDefaultAvailabilityZone",
+			func(region string, az *string) {
+				v := getDefaultAvailabilityZone(region)
+				if az == nil {
+					Expect(v).Should(BeNil())
+				} else {
+					Expect(*v).Should(Equal(*az))
+				}
+			},
+
+			Entry("us-east-2", "us-east-2", pointer.String("us-east-2a")),
+			Entry("us-east-1", "us-east-1", pointer.String("us-east-1a")),
+			Entry("us-west-1", "us-west-1", pointer.String("us-west-1a")),
+			Entry("us-west-2", "us-west-2", pointer.String("us-west-2a")),
+			Entry("af-south-1", "af-south-1", pointer.String("af-south-1a")),
+			Entry("ap-east-1", "ap-east-1", pointer.String("ap-east-1a")),
+			Entry("ap-south-2", "ap-south-2", pointer.String("ap-south-2a")),
+			Entry("ap-southeast-3", "ap-southeast-3", pointer.String("ap-southeast-3a")),
+			Entry("ap-south-1", "ap-south-1", pointer.String("ap-south-1a")),
+			Entry("ap-northeast-3", "ap-northeast-3", pointer.String("ap-northeast-3a")),
+			Entry("ap-northeast-2", "ap-northeast-2", pointer.String("ap-northeast-2a")),
+			Entry("ap-southeast-1", "ap-southeast-1", pointer.String("ap-southeast-1a")),
+			Entry("ap-southeast-2", "ap-southeast-2", pointer.String("ap-southeast-2a")),
+			Entry("ap-northeast-1", "ap-northeast-1", pointer.String("ap-northeast-1a")),
+			Entry("ca-central-1", "ca-central-1", pointer.String("ca-central-1a")),
+			Entry("eu-central-1", "eu-central-1", pointer.String("eu-central-1a")),
+			Entry("eu-west-1", "eu-west-1", pointer.String("eu-west-1a")),
+			Entry("eu-west-2", "eu-west-2", pointer.String("eu-west-2a")),
+			Entry("eu-south-1", "eu-south-1", pointer.String("eu-south-1a")),
+			Entry("eu-west-3", "eu-west-3", pointer.String("eu-west-3a")),
+			Entry("eu-south-2", "eu-south-2", pointer.String("eu-south-2a")),
+			Entry("eu-north-1", "eu-north-1", pointer.String("eu-north-1a")),
+			Entry("eu-central-2", "eu-central-2", pointer.String("eu-central-2a")),
+			Entry("me-south-1", "me-south-1", pointer.String("me-south-1a")),
+			Entry("me-central-1", "me-central-1", pointer.String("me-central-1a")),
+			Entry("sa-east-1", "sa-east-1", pointer.String("sa-east-1a")),
+			Entry("us-gov-east-1", "us-gov-east-1", pointer.String("us-gov-east-1a")),
+			Entry("us-gov-west-1", "us-gov-west-1", pointer.String("us-gov-west-1a")),
+			Entry("Invalid", "invalid", nil),
+			Entry("nil", "", nil),
 		)
 	})
 

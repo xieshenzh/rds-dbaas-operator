@@ -35,7 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
+	dbaasv1beta1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1beta1"
 	rdsdbaasv1alpha1 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
 	rdsv1alpha1 "github.com/aws-controllers-k8s/rds-controller/apis/v1alpha1"
 )
@@ -386,7 +386,7 @@ func setConfigMap(cm *v1.ConfigMap, dbInstance *rdsv1alpha1.DBInstance) {
 
 func buildConnectionLabels() map[string]string {
 	return map[string]string{
-		dbaasv1alpha1.TypeLabelKey: dbaasv1alpha1.TypeLabelValue,
+		dbaasv1beta1.TypeLabelKey: dbaasv1beta1.TypeLabelValue,
 	}
 }
 

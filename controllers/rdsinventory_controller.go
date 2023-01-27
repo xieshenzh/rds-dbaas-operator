@@ -26,7 +26,7 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -44,7 +44,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
+	dbaasv1beta1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1beta1"
 	rdsdbaasv1alpha1 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
 	controllersrds "github.com/RHEcosystemAppEng/rds-dbaas-operator/controllers/rds"
 	rdsv1alpha1 "github.com/aws-controllers-k8s/rds-controller/apis/v1alpha1"
@@ -606,7 +606,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return true
 		}
 
-		var instances []dbaasv1alpha1.Instance
+		var instances []dbaasv1beta1.Instance
 		for i := range dbInstanceList.Items {
 			dbInstance := dbInstanceList.Items[i]
 			if dbInstance.Spec.DBInstanceIdentifier == nil ||
@@ -616,7 +616,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			if _, ok := awsDBInstanceIdentifiers[string(*dbInstance.Status.ACKResourceMetadata.ARN)]; !ok {
 				continue
 			}
-			instance := dbaasv1alpha1.Instance{
+			instance := dbaasv1beta1.Instance{
 				InstanceID:   *dbInstance.Spec.DBInstanceIdentifier,
 				Name:         dbInstance.Name,
 				InstanceInfo: parseDBInstanceStatus(&dbInstance),
@@ -766,7 +766,7 @@ func (r *RDSInventoryReconciler) createOrUpdateConfigMap(ctx context.Context, cl
 
 func buildDBaaSLabels() map[string]string {
 	return map[string]string{
-		dbaasv1alpha1.TypeLabelKey: dbaasv1alpha1.TypeLabelValue,
+		dbaasv1beta1.TypeLabelKey: dbaasv1beta1.TypeLabelValue,
 	}
 }
 
