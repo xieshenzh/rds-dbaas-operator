@@ -81,8 +81,8 @@ const (
 	fieldExportCRDFile     = "services.k8s.aws_fieldexports.yaml"
 	ackDeploymentName      = "ack-rds-controller"
 
-	adpotedDBInstanceLabelKey   = "rds.dbaas.redhat.com/adopted"
-	adpotedDBInstanceLabelValue = "true"
+	adoptedDBResourceLabelKey   = "rds.dbaas.redhat.com/adopted"
+	adoptedDBResourceLabelValue = "true"
 
 	inventoryConditionReady = "SpecSynced"
 
@@ -91,18 +91,22 @@ const (
 	inventoryStatusReasonBackendError = "BackendError"
 	inventoryStatusReasonNotFound     = "NotFound"
 
-	inventoryStatusMessageUpdateError         = "Failed to update Inventory"
-	inventoryStatusMessageGetInstancesError   = "Failed to get Instances"
-	inventoryStatusMessageAdoptInstanceError  = "Failed to adopt DB Instance"
-	inventoryStatusMessageUpdateInstanceError = "Failed to update DB Instance"
-	inventoryStatusMessageGetError            = "Failed to get %s"
-	inventoryStatusMessageDeleteError         = "Failed to delete %s"
-	inventoryStatusMessageResetError          = "Failed to reset %s"
-	inventoryStatusMessageCreateOrUpdateError = "Failed to create or update %s"
-	inventoryStatusMessageCredentialsError    = "The AWS service account is not valid for accessing RDS DB instances"
-	inventoryStatusMessageInstallError        = "Failed to install %s for RDS controller"
-	inventoryStatusMessageVerifyInstallError  = "Failed to verify %s ready for RDS controller"
-	inventoryStatusMessageUninstallError      = "Failed to uninstall RDS controller"
+	inventoryStatusMessageUpdateError              = "Failed to update Inventory"
+	inventoryStatusMessageGetInstancesError        = "Failed to get Instances"
+	inventoryStatusMessageGetClustersError         = "Failed to get clusters"
+	inventoryStatusMessageAdoptInstanceError       = "Failed to adopt DB Instance"
+	inventoryStatusMessageAdoptClusterError        = "Failed to adopt DB Cluster"
+	inventoryStatusMessageUpdateInstanceError      = "Failed to update DB Instance"
+	inventoryStatusMessageUpdateClusterError       = "Failed to update DB Cluster"
+	inventoryStatusMessageGetError                 = "Failed to get %s"
+	inventoryStatusMessageDeleteError              = "Failed to delete %s"
+	inventoryStatusMessageResetError               = "Failed to reset %s"
+	inventoryStatusMessageCreateOrUpdateError      = "Failed to create or update %s"
+	inventoryStatusMessageCredentialsInstanceError = "The AWS service account is not valid for accessing RDS DB instances"
+	inventoryStatusMessageCredentialsClusterError  = "The AWS service account is not valid for accessing RDS DB clusters"
+	inventoryStatusMessageInstallError             = "Failed to install %s for RDS controller"
+	inventoryStatusMessageVerifyInstallError       = "Failed to verify %s ready for RDS controller"
+	inventoryStatusMessageUninstallError           = "Failed to uninstall RDS controller"
 
 	requiredCredentialErrorTemplate = "required credential %s is missing"
 )
@@ -114,6 +118,9 @@ type RDSInventoryReconciler struct {
 	GetDescribeDBInstancesPaginatorAPI func(accessKey, secretKey, region string) controllersrds.DescribeDBInstancesPaginatorAPI
 	GetModifyDBInstanceAPI             func(accessKey, secretKey, region string) controllersrds.ModifyDBInstanceAPI
 	GetDescribeDBInstancesAPI          func(accessKey, secretKey, region string) controllersrds.DescribeDBInstancesAPI
+	GetDescribeDBClustersPaginatorAPI  func(accessKey, secretKey, region string) controllersrds.DescribeDBClustersPaginatorAPI
+	GetModifyDBClusterAPI              func(accessKey, secretKey, region string) controllersrds.ModifyDBClusterAPI
+	GetDescribeDBClustersAPI           func(accessKey, secretKey, region string) controllersrds.DescribeDBClustersAPI
 	ACKInstallNamespace                string
 	RDSCRDFilePath                     string
 	WaitForRDSControllerRetries        int
@@ -125,6 +132,8 @@ type RDSInventoryReconciler struct {
 //+kubebuilder:rbac:groups=dbaas.redhat.com,resources=rdsinventories/finalizers,verbs=update
 //+kubebuilder:rbac:groups=rds.services.k8s.aws,resources=dbinstances,verbs=get;list;watch;update
 //+kubebuilder:rbac:groups=rds.services.k8s.aws,resources=dbinstances/finalizers,verbs=update
+//+kubebuilder:rbac:groups=rds.services.k8s.aws,resources=dbclusters,verbs=get;list;watch;update
+//+kubebuilder:rbac:groups=rds.services.k8s.aws,resources=dbclusters/finalizers,verbs=update
 //+kubebuilder:rbac:groups=services.k8s.aws,resources=adoptedresources,verbs=get;list;watch;create;delete;update
 //+kubebuilder:rbac:groups="",resources=secrets;configmaps,verbs=get;list;watch;create;delete;update
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;update
@@ -325,12 +334,22 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 
 		describeDBInstances := r.GetDescribeDBInstancesAPI(accessKey, secretKey, region)
-		input := &rds.DescribeDBInstancesInput{
+		instanceInput := &rds.DescribeDBInstancesInput{
 			MaxRecords: pointer.Int32(20),
 		}
-		if _, e := describeDBInstances.DescribeDBInstances(ctx, input); e != nil {
+		if _, e := describeDBInstances.DescribeDBInstances(ctx, instanceInput); e != nil {
 			logger.Error(e, "Failed to read the DB instances with the AWS service account")
-			returnError(e, inventoryStatusReasonInputError, inventoryStatusMessageCredentialsError)
+			returnError(e, inventoryStatusReasonInputError, inventoryStatusMessageCredentialsInstanceError)
+			return true
+		}
+
+		describeDBClusters := r.GetDescribeDBClustersAPI(accessKey, secretKey, region)
+		clusterInput := &rds.DescribeDBClustersInput{
+			MaxRecords: pointer.Int32(20),
+		}
+		if _, e := describeDBClusters.DescribeDBClusters(ctx, clusterInput); e != nil {
+			logger.Error(e, "Failed to read the DB clusters with the AWS service account")
+			returnError(e, inventoryStatusReasonInputError, inventoryStatusMessageCredentialsClusterError)
 			return true
 		}
 
@@ -463,7 +482,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				adoptingResource = true
 				logger.Info("Adopting DB Instance", "DB Instance Identifier", *dbInstance.DBInstanceIdentifier, "ARN", *dbInstance.DBInstanceArn)
 
-				adoptedDBInstance := createAdoptedResource(&dbInstance, &inventory)
+				adoptedDBInstance := createAdoptedResource(dbInstance.DBInstanceIdentifier, dbInstance.DBInstanceArn, dbInstance.Engine, rdsInstanceKind, &inventory)
 				if e := ophandler.SetOwnerAnnotations(&inventory, adoptedDBInstance); e != nil {
 					logger.Error(e, "Failed to create adopted DB Instance in the cluster")
 					returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageAdoptInstanceError)
@@ -485,7 +504,7 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 		adoptedDBInstanceList := &rdsv1alpha1.DBInstanceList{}
 		if e := r.List(ctx, adoptedDBInstanceList, client.InNamespace(inventory.Namespace),
-			client.MatchingLabels(map[string]string{adpotedDBInstanceLabelKey: adpotedDBInstanceLabelValue})); e != nil {
+			client.MatchingLabels(map[string]string{adoptedDBResourceLabelKey: adoptedDBResourceLabelValue})); e != nil {
 			logger.Error(e, "Failed to read adopted DB Instances of the Inventory that are created by the operator")
 			returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetInstancesError)
 			return true, false
@@ -547,7 +566,20 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 					logger.Info("DB Instance is not available to reset credentials", "DB Instance Identifier", *adoptedDBInstance.Spec.DBInstanceIdentifier)
 					continue
 				}
-				s, e := setCredentials(ctx, r.Client, r.Scheme, &adoptedDBInstance, inventory.Namespace, &adoptedDBInstance, adoptedDBInstance.Kind)
+				s, e := setCredentials(ctx, r.Client, r.Scheme, adoptedDBInstance.GetName(), inventory.Namespace, &adoptedDBInstance, adoptedDBInstance.Kind,
+					func(secretName string) {
+						if adoptedDBInstance.Spec.MasterUsername == nil {
+							adoptedDBInstance.Spec.MasterUsername = pointer.String(generateUsername(*adoptedDBInstance.Spec.Engine))
+						}
+
+						adoptedDBInstance.Spec.MasterUserPassword = &ackv1alpha1.SecretKeyReference{
+							SecretReference: v1.SecretReference{
+								Name:      secretName,
+								Namespace: inventory.Namespace,
+							},
+							Key: "password",
+						}
+					})
 				if e != nil {
 					returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageUpdateInstanceError)
 					return true, false
@@ -582,14 +614,239 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return false, false
 	}
 
-	syncDBInstancesStatus := func() bool {
+	adoptDBClusters := func() (bool, bool) {
+		var awsDBClusters []rdstypesv2.DBCluster
+		describeDBClustersPaginator := r.GetDescribeDBClustersPaginatorAPI(accessKey, secretKey, region)
+		for describeDBClustersPaginator.HasMorePages() {
+			if output, e := describeDBClustersPaginator.NextPage(ctx); e != nil {
+				logger.Error(e, "Failed to read DB clusters of the Inventory from AWS")
+				returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetClustersError)
+				return true, false
+			} else if output != nil {
+				awsDBClusters = append(awsDBClusters, output.DBClusters...)
+			}
+		}
+
+		awsDBClusterMap := make(map[string]rdstypesv2.DBCluster, len(awsDBClusters))
+		if len(awsDBClusters) > 0 {
+			// query all db clusters in cluster
+			clusterDBClusterList := &rdsv1alpha1.DBClusterList{}
+			if e := r.List(ctx, clusterDBClusterList, client.InNamespace(inventory.Namespace)); e != nil {
+				logger.Error(e, "Failed to read DB Clusters of the Inventory in the cluster")
+				returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetClustersError)
+				return true, false
+			}
+
+			dbClusterMap := make(map[string]string, len(clusterDBClusterList.Items))
+			for _, dbCluster := range clusterDBClusterList.Items {
+				if dbCluster.Spec.DBClusterIdentifier != nil &&
+					dbCluster.Status.ACKResourceMetadata != nil && dbCluster.Status.ACKResourceMetadata.ARN != nil {
+					dbClusterMap[string(*dbCluster.Status.ACKResourceMetadata.ARN)] = *dbCluster.Spec.DBClusterIdentifier
+				}
+			}
+
+			adoptedResourceList := &ackv1alpha1.AdoptedResourceList{}
+			if e := r.List(ctx, adoptedResourceList, client.InNamespace(inventory.Namespace)); e != nil {
+				logger.Error(e, "Failed to read adopted DB Clusters of the Inventory in the cluster")
+				returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetClustersError)
+				return true, false
+			}
+			adoptedDBClusterMap := make(map[string]ackv1alpha1.AdoptedResource, len(adoptedResourceList.Items))
+			for _, adoptedDBCluster := range adoptedResourceList.Items {
+				if adoptedDBCluster.Spec.AWS != nil && adoptedDBCluster.Spec.AWS.ARN != nil {
+					adoptedDBClusterMap[string(*adoptedDBCluster.Spec.AWS.ARN)] = adoptedDBCluster
+				}
+			}
+
+			adoptingResource := false
+			for i := range awsDBClusters {
+				dbCluster := awsDBClusters[i]
+
+				if dbCluster.DBClusterArn == nil {
+					continue
+				}
+				awsDBClusterMap[*dbCluster.DBClusterArn] = dbCluster
+
+				if dbCluster.Engine == nil {
+					continue
+				} else {
+					switch *dbCluster.Engine {
+					case mariadb, oracleSe2, oracleSe2Cdb, oracleEe, oracleEeCdb, customOracleEe, sqlserverEe, sqlserverSe,
+						sqlserverEx, sqlserverWeb, customSqlserverEe, customSqlserverSe, customSqlserverWeb:
+						continue
+					default:
+					}
+				}
+				if dbCluster.Status != nil && *dbCluster.Status == "deleting" {
+					continue
+				}
+
+				if _, ok := dbClusterMap[*dbCluster.DBClusterArn]; ok {
+					continue
+				}
+
+				if adoptedDBCluster, ok := adoptedDBClusterMap[*dbCluster.DBClusterArn]; ok {
+					// Wait for the DB clusters that are being adopted
+					if adoptedDBCluster.Status.Conditions == nil {
+						adoptingResource = true
+					} else {
+						adopted := false
+						for j := range adoptedDBCluster.Status.Conditions {
+							condition := adoptedDBCluster.Status.Conditions[j]
+							if condition != nil && condition.Type == ackv1alpha1.ConditionTypeAdopted &&
+								condition.Status == v1.ConditionTrue {
+								adopted = true
+								break
+							}
+						}
+						if !adopted {
+							adoptingResource = true
+						}
+					}
+					continue
+				}
+
+				adoptingResource = true
+				logger.Info("Adopting DB Cluster", "DB Cluster Identifier", *dbCluster.DBClusterIdentifier, "ARN", *dbCluster.DBClusterArn)
+
+				adoptedDBCluster := createAdoptedResource(dbCluster.DBClusterIdentifier, dbCluster.DBClusterArn, dbCluster.Engine, rdsClusterKind, &inventory)
+				if e := ophandler.SetOwnerAnnotations(&inventory, adoptedDBCluster); e != nil {
+					logger.Error(e, "Failed to create adopted DB Cluster in the cluster")
+					returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageAdoptClusterError)
+					return true, false
+				}
+				if e := r.Create(ctx, adoptedDBCluster); e != nil {
+					logger.Error(e, "Failed to create adopted DB Cluster in the cluster")
+					returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageAdoptClusterError)
+					return true, false
+				}
+			}
+
+			if adoptingResource {
+				logger.Info("Adopting DB Cluster")
+				returnRequeueSyncReset()
+				return true, false
+			}
+		}
+
+		adoptedDBClusterList := &rdsv1alpha1.DBClusterList{}
+		if e := r.List(ctx, adoptedDBClusterList, client.InNamespace(inventory.Namespace),
+			client.MatchingLabels(map[string]string{adoptedDBResourceLabelKey: adoptedDBResourceLabelValue})); e != nil {
+			logger.Error(e, "Failed to read adopted DB Clusters of the Inventory that are created by the operator")
+			returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetClustersError)
+			return true, false
+		}
+		modifyDBCluster := r.GetModifyDBClusterAPI(accessKey, secretKey, region)
+		waitForAdoptedResource := false
+		for i := range adoptedDBClusterList.Items {
+			adoptedDBCluster := adoptedDBClusterList.Items[i]
+			if adoptedDBCluster.Spec.Engine == nil {
+				continue
+			} else {
+				switch *adoptedDBCluster.Spec.Engine {
+				case mariadb, oracleSe2, oracleSe2Cdb, oracleEe, oracleEeCdb, customOracleEe, sqlserverEe, sqlserverSe,
+					sqlserverEx, sqlserverWeb, customSqlserverEe, customSqlserverSe, customSqlserverWeb:
+					continue
+				default:
+				}
+			}
+			if adoptedDBCluster.Status.Status != nil && *adoptedDBCluster.Status.Status == "deleting" {
+				continue
+			}
+			if adoptedDBCluster.Status.ACKResourceMetadata == nil || adoptedDBCluster.Status.ACKResourceMetadata.ARN == nil {
+				continue
+			}
+			awsDBCluster, awsOk := awsDBClusterMap[string(*adoptedDBCluster.Status.ACKResourceMetadata.ARN)]
+			if !awsOk {
+				continue
+			}
+
+			if adoptedDBCluster.Spec.MasterUsername == nil || adoptedDBCluster.Spec.DatabaseName == nil {
+				update := false
+				if adoptedDBCluster.Spec.MasterUsername == nil && awsDBCluster.MasterUsername != nil {
+					adoptedDBCluster.Spec.MasterUsername = pointer.String(*awsDBCluster.MasterUsername)
+					update = true
+				}
+				if adoptedDBCluster.Spec.DatabaseName == nil && awsDBCluster.DatabaseName != nil {
+					adoptedDBCluster.Spec.DatabaseName = pointer.String(*awsDBCluster.DatabaseName)
+					update = true
+				}
+				if update {
+					if e := r.Update(ctx, &adoptedDBCluster); e != nil {
+						if errors.IsConflict(e) {
+							logger.Info("Adopted DB Cluster modified, retry reconciling")
+							returnRequeueSyncReset()
+							return true, false
+						}
+						logger.Error(e, "Failed to update connection info of the adopted DB Cluster", "DB Cluster", adoptedDBCluster)
+						returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageUpdateClusterError)
+						return true, false
+					}
+				}
+			}
+
+			if adoptedDBCluster.Spec.MasterUserPassword == nil {
+				if adoptedDBCluster.Status.Status == nil || *adoptedDBCluster.Status.Status != "available" {
+					waitForAdoptedResource = true
+					logger.Info("DB Cluster is not available to reset credentials", "DB Cluster Identifier", *adoptedDBCluster.Spec.DBClusterIdentifier)
+					continue
+				}
+				s, e := setCredentials(ctx, r.Client, r.Scheme, adoptedDBCluster.GetName(), inventory.Namespace, &adoptedDBCluster, adoptedDBCluster.Kind,
+					func(secretName string) {
+						if adoptedDBCluster.Spec.MasterUsername == nil {
+							adoptedDBCluster.Spec.MasterUsername = pointer.String(generateUsername(*adoptedDBCluster.Spec.Engine))
+						}
+
+						adoptedDBCluster.Spec.MasterUserPassword = &ackv1alpha1.SecretKeyReference{
+							SecretReference: v1.SecretReference{
+								Name:      secretName,
+								Namespace: inventory.Namespace,
+							},
+							Key: "password",
+						}
+					})
+				if e != nil {
+					returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageUpdateClusterError)
+					return true, false
+				}
+				password := s.Data["password"]
+				input := &rds.ModifyDBClusterInput{
+					DBClusterIdentifier: adoptedDBCluster.Spec.DBClusterIdentifier,
+					MasterUserPassword:  pointer.String(string(password)),
+					ApplyImmediately:    true,
+				}
+				if _, e := modifyDBCluster.ModifyDBCluster(ctx, input); e != nil {
+					logger.Error(e, "Failed to update credentials of the adopted DB Cluster", "DB Cluster", adoptedDBCluster)
+					returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageUpdateClusterError)
+					return true, false
+				}
+				if e := r.Update(ctx, &adoptedDBCluster); e != nil {
+					if errors.IsConflict(e) {
+						logger.Info("Adopted DB Cluster modified, retry reconciling")
+						returnRequeueSyncReset()
+						return true, false
+					}
+					logger.Error(e, "Failed to update credentials of the adopted DB Cluster", "DB Cluster", adoptedDBCluster)
+					returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageUpdateClusterError)
+					return true, false
+				}
+			}
+		}
+		if waitForAdoptedResource {
+			logger.Info("DB Cluster being adopted is not available, retry reconciling")
+			return false, true
+		}
+		return false, false
+	}
+
+	syncDBInstancesStatus := func() (bool, []dbaasv1beta1.DatabaseService) {
 		awsDBInstanceIdentifiers := map[string]string{}
 		describeDBInstancesPaginator := r.GetDescribeDBInstancesPaginatorAPI(accessKey, secretKey, region)
 		for describeDBInstancesPaginator.HasMorePages() {
 			if output, e := describeDBInstancesPaginator.NextPage(ctx); e != nil {
 				logger.Error(e, "Failed to read DB Instances of the Inventory from AWS")
 				returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetInstancesError)
-				return true
+				return true, nil
 			} else if output != nil {
 				for _, instance := range output.DBInstances {
 					if instance.DBInstanceIdentifier != nil && instance.DBInstanceArn != nil {
@@ -603,10 +860,11 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if e := r.List(ctx, dbInstanceList, client.InNamespace(inventory.Namespace)); e != nil {
 			logger.Error(e, "Failed to read DB Instances of the Inventory in the cluster")
 			returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetInstancesError)
-			return true
+			return true, nil
 		}
 
-		var instances []dbaasv1beta1.Instance
+		serviceType := dbaasv1beta1.DatabaseServiceType(instanceType)
+		var services []dbaasv1beta1.DatabaseService
 		for i := range dbInstanceList.Items {
 			dbInstance := dbInstanceList.Items[i]
 			if dbInstance.Spec.DBInstanceIdentifier == nil ||
@@ -616,27 +874,63 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			if _, ok := awsDBInstanceIdentifiers[string(*dbInstance.Status.ACKResourceMetadata.ARN)]; !ok {
 				continue
 			}
-			instance := dbaasv1beta1.Instance{
-				InstanceID:   *dbInstance.Spec.DBInstanceIdentifier,
-				Name:         dbInstance.Name,
-				InstanceInfo: parseDBInstanceStatus(&dbInstance),
+			service := dbaasv1beta1.DatabaseService{
+				ServiceID:   *dbInstance.Spec.DBInstanceIdentifier,
+				ServiceName: dbInstance.Name,
+				ServiceType: &serviceType,
+				ServiceInfo: parseDBInstanceStatus(&dbInstance),
 			}
-			instances = append(instances, instance)
-		}
-		inventory.Status.Instances = instances
-
-		if e := r.Status().Update(ctx, &inventory); e != nil {
-			if errors.IsConflict(e) {
-				logger.Info("Inventory modified, retry reconciling")
-				returnRequeueSyncReset()
-				return true
-			}
-			logger.Error(e, "Failed to update Inventory status")
-			returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageUpdateError)
-			return true
+			services = append(services, service)
 		}
 
-		return false
+		return false, services
+	}
+
+	syncDBClustersStatus := func() (bool, []dbaasv1beta1.DatabaseService) {
+		awsDBClusterIdentifiers := map[string]string{}
+		describeDBClustersPaginator := r.GetDescribeDBClustersPaginatorAPI(accessKey, secretKey, region)
+		for describeDBClustersPaginator.HasMorePages() {
+			if output, e := describeDBClustersPaginator.NextPage(ctx); e != nil {
+				logger.Error(e, "Failed to read DB Clusters of the Inventory from AWS")
+				returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetClustersError)
+				return true, nil
+			} else if output != nil {
+				for _, cluster := range output.DBClusters {
+					if cluster.DBClusterIdentifier != nil && cluster.DBClusterArn != nil {
+						awsDBClusterIdentifiers[*cluster.DBClusterArn] = *cluster.DBClusterIdentifier
+					}
+				}
+			}
+		}
+
+		dbClusterList := &rdsv1alpha1.DBClusterList{}
+		if e := r.List(ctx, dbClusterList, client.InNamespace(inventory.Namespace)); e != nil {
+			logger.Error(e, "Failed to read DB Clusters of the Inventory in the cluster")
+			returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetClustersError)
+			return true, nil
+		}
+
+		serviceType := dbaasv1beta1.DatabaseServiceType(clusterType)
+		var services []dbaasv1beta1.DatabaseService
+		for i := range dbClusterList.Items {
+			dbCluster := dbClusterList.Items[i]
+			if dbCluster.Spec.DBClusterIdentifier == nil ||
+				dbCluster.Status.ACKResourceMetadata == nil || dbCluster.Status.ACKResourceMetadata.ARN == nil {
+				continue
+			}
+			if _, ok := awsDBClusterIdentifiers[string(*dbCluster.Status.ACKResourceMetadata.ARN)]; !ok {
+				continue
+			}
+			service := dbaasv1beta1.DatabaseService{
+				ServiceID:   *dbCluster.Spec.DBClusterIdentifier,
+				ServiceName: dbCluster.Name,
+				ServiceType: &serviceType,
+				ServiceInfo: parseDBClusterStatus(&dbCluster),
+			}
+			services = append(services, service)
+		}
+
+		return false, services
 	}
 
 	if err = r.Get(ctx, req.NamespacedName, &inventory); err != nil {
@@ -662,16 +956,40 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return
 	}
 
-	rt, rq := adoptDBInstances()
-	if rt {
+	rtc, rqc := adoptDBClusters()
+
+	rti, rqi := adoptDBInstances()
+
+	if rtc || rti {
 		return
 	}
 
-	if syncDBInstancesStatus() {
+	var services []dbaasv1beta1.DatabaseService
+	if rt, sv := syncDBClustersStatus(); rt {
+		return
+	} else {
+		services = append(services, sv...)
+	}
+
+	if rt, sv := syncDBInstancesStatus(); rt {
+		return
+	} else {
+		services = append(services, sv...)
+	}
+
+	inventory.Status.DatabaseServices = services
+	if e := r.Status().Update(ctx, &inventory); e != nil {
+		if errors.IsConflict(e) {
+			logger.Info("Inventory modified, retry reconciling")
+			returnRequeueSyncReset()
+			return
+		}
+		logger.Error(e, "Failed to update Inventory status")
+		returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageUpdateError)
 		return
 	}
 
-	if rq {
+	if rqi || rqc {
 		returnReadyRequeue()
 	} else {
 		returnReady()
@@ -875,12 +1193,13 @@ func (r *RDSInventoryReconciler) startRDSController(ctx context.Context) error {
 	return nil
 }
 
-func createAdoptedResource(dbInstance *rdstypesv2.DBInstance, inventory *rdsdbaasv1alpha1.RDSInventory) *ackv1alpha1.AdoptedResource {
-	arn := ackv1alpha1.AWSResourceName(*dbInstance.DBInstanceArn)
+func createAdoptedResource(resourceIdentifier *string, resourceArn *string, engine *string, resourceKind string,
+	inventory *rdsdbaasv1alpha1.RDSInventory) *ackv1alpha1.AdoptedResource {
+	arn := ackv1alpha1.AWSResourceName(*resourceArn)
 	return &ackv1alpha1.AdoptedResource{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: inventory.Namespace,
-			Name:      fmt.Sprintf("rhoda-adopted-%s%s-%s", getDBEngineAbbreviation(dbInstance.Engine), strings.ToLower(*dbInstance.DBInstanceIdentifier), uuid.NewUUID()),
+			Name:      fmt.Sprintf("rhoda-adopted-%s%s-%s", getDBEngineAbbreviation(engine), strings.ToLower(*resourceIdentifier), uuid.NewUUID()),
 			Annotations: map[string]string{
 				"managed-by":      "rds-dbaas-operator",
 				"owner":           inventory.Name,
@@ -892,17 +1211,17 @@ func createAdoptedResource(dbInstance *rdstypesv2.DBInstance, inventory *rdsdbaa
 			Kubernetes: &ackv1alpha1.ResourceWithMetadata{
 				GroupKind: metav1.GroupKind{
 					Group: rdsv1alpha1.GroupVersion.Group,
-					Kind:  rdsInstanceKind,
+					Kind:  resourceKind,
 				},
 				Metadata: &ackv1alpha1.PartialObjectMeta{
 					Namespace: inventory.Namespace,
 					Labels: map[string]string{
-						adpotedDBInstanceLabelKey: adpotedDBInstanceLabelValue,
+						adoptedDBResourceLabelKey: adoptedDBResourceLabelValue,
 					},
 				},
 			},
 			AWS: &ackv1alpha1.AWSIdentifiers{
-				NameOrID: *dbInstance.DBInstanceIdentifier,
+				NameOrID: *resourceIdentifier,
 				ARN:      &arn,
 			},
 		},
@@ -943,7 +1262,13 @@ func (r *RDSInventoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(
 			&source.Kind{Type: &rdsv1alpha1.DBInstance{}},
 			handler.EnqueueRequestsFromMapFunc(func(o client.Object) []reconcile.Request {
-				return getInstanceInventoryRequests(o, mgr)
+				return getRDSObjectInventoryRequests(o, mgr)
+			}),
+		).
+		Watches(
+			&source.Kind{Type: &rdsv1alpha1.DBCluster{}},
+			handler.EnqueueRequestsFromMapFunc(func(o client.Object) []reconcile.Request {
+				return getRDSObjectInventoryRequests(o, mgr)
 			}),
 		).
 		Watches(
@@ -955,15 +1280,14 @@ func (r *RDSInventoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func getInstanceInventoryRequests(object client.Object, mgr ctrl.Manager) []reconcile.Request {
+func getRDSObjectInventoryRequests(object client.Object, mgr ctrl.Manager) []reconcile.Request {
 	ctx := context.Background()
 	logger := log.FromContext(ctx)
 	cli := mgr.GetClient()
 
-	dbInstance := object.(*rdsv1alpha1.DBInstance)
 	inventoryList := &rdsdbaasv1alpha1.RDSInventoryList{}
-	if e := cli.List(ctx, inventoryList, client.InNamespace(dbInstance.Namespace)); e != nil {
-		logger.Error(e, "Failed to get Inventories for DB Instance update", "DBInstance ID", dbInstance.Spec.DBInstanceIdentifier)
+	if e := cli.List(ctx, inventoryList, client.InNamespace(object.GetNamespace())); e != nil {
+		logger.Error(e, "Failed to get Inventories for RDS object update", "RDS Object", object.GetName())
 		return nil
 	}
 

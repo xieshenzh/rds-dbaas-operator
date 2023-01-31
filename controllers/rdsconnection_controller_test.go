@@ -164,7 +164,7 @@ var _ = Describe("RDSConnectionController", func() {
 						Name:      inventoryName,
 						Namespace: testNamespace,
 					},
-					InstanceID: instanceID,
+					DatabaseServiceID: instanceID,
 				},
 			}
 			BeforeEach(assertResourceCreation(connection))
@@ -260,7 +260,7 @@ var _ = Describe("RDSConnectionController", func() {
 								if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(conn), conn); err != nil {
 									return false
 								}
-								conn.Spec.InstanceID = "instance-id-connection-controller-not-exist"
+								conn.Spec.DatabaseServiceID = "instance-id-connection-controller-not-exist"
 								err := k8sClient.Update(ctx, conn)
 								return err == nil
 							}, timeout).Should(BeTrue())
@@ -661,13 +661,13 @@ var _ = Describe("RDSConnectionController", func() {
 							Name:      inventoryName,
 							Namespace: testNamespace,
 						},
-						InstanceID: instanceIDOracle,
+						DatabaseServiceID: instanceIDOracle,
 					},
 				}
 				BeforeEach(assertResourceCreation(connection))
 				AfterEach(assertResourceDeletion(connection))
 
-				It("should add jdbc-url to the ConfigMap for service binding", func() {
+				It("should not add jdbc-url to the ConfigMap for service binding", func() {
 					By("checking the status of the Connection")
 					conn := &rdsdbaasv1alpha1.RDSConnection{
 						ObjectMeta: metav1.ObjectMeta{
@@ -699,9 +699,8 @@ var _ = Describe("RDSConnectionController", func() {
 					}
 					err := k8sClient.Get(ctx, client.ObjectKeyFromObject(configmap), configmap)
 					Expect(err).ShouldNot(HaveOccurred())
-					ju, juOk := configmap.Data["jdbc-url"]
-					Expect(juOk).Should(BeTrue())
-					Expect(ju).Should(Equal("jdbc:oracle:thin:@address-oracle-connection-controller:9000/ORCL"))
+					_, juOk := configmap.Data["jdbc-url"]
+					Expect(juOk).Should(BeFalse())
 					t, typeOk := configmap.Data["type"]
 					Expect(typeOk).Should(BeTrue())
 					Expect(t).Should(Equal("oracle"))
@@ -747,13 +746,13 @@ var _ = Describe("RDSConnectionController", func() {
 							Name:      inventoryName,
 							Namespace: testNamespace,
 						},
-						InstanceID: instanceIDSqlServer,
+						DatabaseServiceID: instanceIDSqlServer,
 					},
 				}
 				BeforeEach(assertResourceCreation(connection))
 				AfterEach(assertResourceDeletion(connection))
 
-				It("should add jdbc-url to the ConfigMap for service binding", func() {
+				It("should not add jdbc-url to the ConfigMap for service binding", func() {
 					By("checking the status of the Connection")
 					conn := &rdsdbaasv1alpha1.RDSConnection{
 						ObjectMeta: metav1.ObjectMeta{
@@ -785,9 +784,8 @@ var _ = Describe("RDSConnectionController", func() {
 					}
 					err := k8sClient.Get(ctx, client.ObjectKeyFromObject(configmap), configmap)
 					Expect(err).ShouldNot(HaveOccurred())
-					ju, juOk := configmap.Data["jdbc-url"]
-					Expect(juOk).Should(BeTrue())
-					Expect(ju).Should(Equal("jdbc:sqlserver://address-sqlserver-connection-controller:9000;databaseName=master"))
+					_, juOk := configmap.Data["jdbc-url"]
+					Expect(juOk).Should(BeFalse())
 					t, typeOk := configmap.Data["type"]
 					Expect(typeOk).Should(BeTrue())
 					Expect(t).Should(Equal("sqlserver"))
@@ -803,6 +801,482 @@ var _ = Describe("RDSConnectionController", func() {
 					db, dbOk := configmap.Data["database"]
 					Expect(dbOk).Should(BeTrue())
 					Expect(db).Should(Equal("master"))
+				})
+			})
+		})
+	})
+
+	Context("when DB clusters are created", func() {
+		clusterID := "cluster-id-connection-controller"
+
+		dbCluster := &rdsv1alpha1.DBCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "db-cluster-postgres-connection-controller",
+				Namespace: testNamespace,
+			},
+			Spec: rdsv1alpha1.DBClusterSpec{
+				Engine:                 pointer.String("postgres"),
+				DBClusterIdentifier:    pointer.String(clusterID),
+				DBClusterInstanceClass: pointer.String("db.t3.micro"),
+			},
+		}
+		BeforeEach(assertResourceCreation(dbCluster))
+		AfterEach(assertResourceDeletion(dbCluster))
+		BeforeEach(func() {
+			Eventually(func() bool {
+				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbCluster), dbCluster); err != nil {
+					return false
+				}
+				arn := ackv1alpha1.AWSResourceName(clusterID)
+				ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+				region := ackv1alpha1.AWSRegion("us-east-1")
+				dbCluster.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+					ARN:            &arn,
+					OwnerAccountID: &ownerAccountID,
+					Region:         &region,
+				}
+				err := k8sClient.Status().Update(ctx, dbCluster)
+				return err == nil
+			}, timeout).Should(BeTrue())
+		})
+
+		Context("when Connection is created", func() {
+			connectionName := "rds-connection-connection-controller-cluster"
+			inventoryName := "rds-inventory-connection-controller-cluster"
+			clusterType := dbaasv1beta1.DatabaseServiceType("cluster")
+
+			connection := &rdsdbaasv1alpha1.RDSConnection{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      connectionName,
+					Namespace: testNamespace,
+				},
+				Spec: dbaasv1beta1.DBaaSConnectionSpec{
+					InventoryRef: dbaasv1beta1.NamespacedName{
+						Name:      inventoryName,
+						Namespace: testNamespace,
+					},
+					DatabaseServiceID:   clusterID,
+					DatabaseServiceType: &clusterType,
+				},
+			}
+			BeforeEach(assertResourceCreation(connection))
+			AfterEach(assertResourceDeletion(connection))
+
+			Context("when Inventory is not created", func() {
+				It("should make Connection in error status", func() {
+					conn := &rdsdbaasv1alpha1.RDSConnection{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      connectionName,
+							Namespace: testNamespace,
+						},
+					}
+					Eventually(func() bool {
+						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(conn), conn); err != nil {
+							return false
+						}
+						condition := apimeta.FindStatusCondition(conn.Status.Conditions, "ReadyForBinding")
+						if condition == nil || condition.Status != metav1.ConditionFalse || condition.Reason != "NotFound" {
+							return false
+						}
+						return true
+					}, timeout).Should(BeTrue())
+				})
+			})
+
+			Context("when Inventory is created", func() {
+				credentialName := "credentials-ref-connection-controller-cluster"
+
+				inventory := &rdsdbaasv1alpha1.RDSInventory{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      inventoryName,
+						Namespace: testNamespace,
+					},
+					Spec: dbaasv1beta1.DBaaSInventorySpec{
+						CredentialsRef: &dbaasv1beta1.LocalObjectReference{
+							Name: credentialName,
+						},
+					},
+				}
+				BeforeEach(assertResourceCreation(inventory))
+				AfterEach(assertResourceDeletion(inventory))
+
+				Context("when Inventory is not ready", func() {
+					It("should make Connection in error status", func() {
+						conn := &rdsdbaasv1alpha1.RDSConnection{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      connectionName,
+								Namespace: testNamespace,
+							},
+						}
+						Eventually(func() bool {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(conn), conn); err != nil {
+								return false
+							}
+							condition := apimeta.FindStatusCondition(conn.Status.Conditions, "ReadyForBinding")
+							if condition == nil || condition.Status != metav1.ConditionFalse || condition.Reason != "Unreachable" {
+								return false
+							}
+							return true
+						}, timeout).Should(BeTrue())
+					})
+				})
+
+				Context("when Inventory is ready", func() {
+					accessKey := "AKIAIOSFODNN7EXAMPLE" + test.ClusterConnectionControllerTestAccessKeySuffix
+					secretKey := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+					region := "us-east-1"
+
+					credential := &v1.Secret{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      credentialName,
+							Namespace: testNamespace,
+						},
+						Data: map[string][]byte{
+							"AWS_ACCESS_KEY_ID":     []byte(accessKey),
+							"AWS_SECRET_ACCESS_KEY": []byte(secretKey), //#nosec G101
+							"AWS_REGION":            []byte(region),
+						},
+					}
+					BeforeEach(assertResourceCreation(credential))
+					AfterEach(assertResourceDeletion(credential))
+
+					Context("when Cluster is not found", func() {
+						BeforeEach(func() {
+							conn := &rdsdbaasv1alpha1.RDSConnection{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:      connectionName,
+									Namespace: testNamespace,
+								},
+							}
+							Eventually(func() bool {
+								if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(conn), conn); err != nil {
+									return false
+								}
+								conn.Spec.DatabaseServiceID = "cluster-id-connection-controller-not-exist"
+								err := k8sClient.Update(ctx, conn)
+								return err == nil
+							}, timeout).Should(BeTrue())
+						})
+
+						It("should make Connection in error status", func() {
+							conn := &rdsdbaasv1alpha1.RDSConnection{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:      connectionName,
+									Namespace: testNamespace,
+								},
+							}
+							Eventually(func() bool {
+								if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(conn), conn); err != nil {
+									return false
+								}
+								condition := apimeta.FindStatusCondition(conn.Status.Conditions, "ReadyForBinding")
+								if condition == nil || condition.Status != metav1.ConditionFalse || condition.Reason != "NotFound" {
+									return false
+								}
+								return true
+							}, timeout).Should(BeTrue())
+						})
+					})
+
+					Context("when Inventory and Cluster are created", func() {
+						Context("when Cluster is not ready", func() {
+							It("should make Connection in error status", func() {
+								conn := &rdsdbaasv1alpha1.RDSConnection{
+									ObjectMeta: metav1.ObjectMeta{
+										Name:      connectionName,
+										Namespace: testNamespace,
+									},
+								}
+								Eventually(func() bool {
+									if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(conn), conn); err != nil {
+										return false
+									}
+									condition := apimeta.FindStatusCondition(conn.Status.Conditions, "ReadyForBinding")
+									if condition == nil || condition.Status != metav1.ConditionFalse || condition.Reason != "Unreachable" {
+										return false
+									}
+									return true
+								}, timeout).Should(BeTrue())
+							})
+						})
+
+						Context("when Inventory and Cluster are ready", func() {
+							BeforeEach(func() {
+								Eventually(func() bool {
+									if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbCluster), dbCluster); err != nil {
+										return false
+									}
+									dbCluster.Status.Status = pointer.String("available")
+									err := k8sClient.Status().Update(ctx, dbCluster)
+									return err == nil
+								}, timeout).Should(BeTrue())
+							})
+
+							Context("when the Cluster user password is not set", func() {
+								It("should make Connection in error status", func() {
+									conn := &rdsdbaasv1alpha1.RDSConnection{
+										ObjectMeta: metav1.ObjectMeta{
+											Name:      connectionName,
+											Namespace: testNamespace,
+										},
+									}
+									Eventually(func() bool {
+										if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(conn), conn); err != nil {
+											return false
+										}
+										condition := apimeta.FindStatusCondition(conn.Status.Conditions, "ReadyForBinding")
+										if condition == nil || condition.Status != metav1.ConditionFalse || condition.Reason != "InputError" {
+											return false
+										}
+										return true
+									}, timeout).Should(BeTrue())
+								})
+							})
+
+							Context("when the Cluster user password is set", func() {
+								BeforeEach(func() {
+									Eventually(func() bool {
+										if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbCluster), dbCluster); err != nil {
+											return false
+										}
+										dbCluster.Spec.MasterUserPassword = &ackv1alpha1.SecretKeyReference{
+											SecretReference: v1.SecretReference{
+												Name:      "secret-connection-controller-cluster",
+												Namespace: testNamespace,
+											},
+											Key: "password",
+										}
+										err := k8sClient.Update(ctx, dbCluster)
+										return err == nil
+									}, timeout).Should(BeTrue())
+								})
+
+								Context("when the Cluster user password Secret is not created", func() {
+									It("should make Connection in error status", func() {
+										conn := &rdsdbaasv1alpha1.RDSConnection{
+											ObjectMeta: metav1.ObjectMeta{
+												Name:      connectionName,
+												Namespace: testNamespace,
+											},
+										}
+										Eventually(func() bool {
+											if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(conn), conn); err != nil {
+												return false
+											}
+											condition := apimeta.FindStatusCondition(conn.Status.Conditions, "ReadyForBinding")
+											if condition == nil || condition.Status != metav1.ConditionFalse || condition.Reason != "NotFound" {
+												return false
+											}
+											return true
+										}, timeout).Should(BeTrue())
+									})
+								})
+
+								Context("when the Cluster user password Secret is created", func() {
+									passwordSecret := &v1.Secret{
+										ObjectMeta: metav1.ObjectMeta{
+											Name:      "secret-connection-controller-cluster",
+											Namespace: testNamespace,
+										},
+									}
+									BeforeEach(assertResourceCreation(passwordSecret))
+									AfterEach(assertResourceDeletion(passwordSecret))
+
+									Context("when the Cluster user password Secret is not valid", func() {
+										It("should make Connection in error status", func() {
+											conn := &rdsdbaasv1alpha1.RDSConnection{
+												ObjectMeta: metav1.ObjectMeta{
+													Name:      connectionName,
+													Namespace: testNamespace,
+												},
+											}
+											Eventually(func() bool {
+												if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(conn), conn); err != nil {
+													return false
+												}
+												condition := apimeta.FindStatusCondition(conn.Status.Conditions, "ReadyForBinding")
+												if condition == nil || condition.Status != metav1.ConditionFalse || condition.Reason != "InputError" {
+													return false
+												}
+												return true
+											}, timeout).Should(BeTrue())
+										})
+									})
+
+									Context("when the Cluster user password Secret is valid", func() {
+										BeforeEach(func() {
+											Eventually(func() bool {
+												if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(passwordSecret), passwordSecret); err != nil {
+													return false
+												}
+												passwordSecret.Data = map[string][]byte{
+													"password": []byte("testpassword"),
+												}
+												err := k8sClient.Update(ctx, passwordSecret)
+												return err == nil
+											}, timeout).Should(BeTrue())
+										})
+
+										Context("when the Cluster user name is not set", func() {
+											It("should make Connection in error status", func() {
+												conn := &rdsdbaasv1alpha1.RDSConnection{
+													ObjectMeta: metav1.ObjectMeta{
+														Name:      connectionName,
+														Namespace: testNamespace,
+													},
+												}
+												Eventually(func() bool {
+													if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(conn), conn); err != nil {
+														return false
+													}
+													condition := apimeta.FindStatusCondition(conn.Status.Conditions, "ReadyForBinding")
+													if condition == nil || condition.Status != metav1.ConditionFalse || condition.Reason != "InputError" {
+														return false
+													}
+													return true
+												}, timeout).Should(BeTrue())
+											})
+										})
+
+										Context("when the Cluster user name is set", func() {
+											BeforeEach(func() {
+												Eventually(func() bool {
+													if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbCluster), dbCluster); err != nil {
+														return false
+													}
+													dbCluster.Spec.MasterUsername = pointer.String("user-connection-controller")
+													err := k8sClient.Update(ctx, dbCluster)
+													return err == nil
+												}, timeout).Should(BeTrue())
+											})
+
+											Context("when the Cluster endpoint is not available", func() {
+												It("should make Connection in error status", func() {
+													conn := &rdsdbaasv1alpha1.RDSConnection{
+														ObjectMeta: metav1.ObjectMeta{
+															Name:      connectionName,
+															Namespace: testNamespace,
+														},
+													}
+													Eventually(func() bool {
+														if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(conn), conn); err != nil {
+															return false
+														}
+														condition := apimeta.FindStatusCondition(conn.Status.Conditions, "ReadyForBinding")
+														if condition == nil || condition.Status != metav1.ConditionFalse || condition.Reason != "Unreachable" {
+															return false
+														}
+														return true
+													}, timeout).Should(BeTrue())
+												})
+											})
+
+											Context("when the Cluster endpoint is available", func() {
+												BeforeEach(func() {
+													Eventually(func() bool {
+														if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbCluster), dbCluster); err != nil {
+															return false
+														}
+														dbCluster.Spec.Port = pointer.Int64(9000)
+														err := k8sClient.Update(ctx, dbCluster)
+														if err != nil {
+															return false
+														}
+														dbCluster.Status.Endpoint = pointer.String("address-connection-controller")
+														err = k8sClient.Status().Update(ctx, dbCluster)
+														return err == nil
+													}, timeout).Should(BeTrue())
+												})
+
+												Context("when the Cluster connection info is complete", func() {
+													It("should create Secret and ConfigMap for binding", func() {
+														By("checking the status of the Connection")
+														conn := &rdsdbaasv1alpha1.RDSConnection{
+															ObjectMeta: metav1.ObjectMeta{
+																Name:      connectionName,
+																Namespace: testNamespace,
+															},
+														}
+														Eventually(func() bool {
+															if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(conn), conn); err != nil {
+																return false
+															}
+															condition := apimeta.FindStatusCondition(conn.Status.Conditions, "ReadyForBinding")
+															if condition == nil || condition.Status != metav1.ConditionTrue || condition.Reason != "Ready" {
+																return false
+															}
+															Expect(conn.Status.CredentialsRef).ShouldNot(BeNil())
+															Expect(conn.Status.CredentialsRef.Name).Should(Equal(fmt.Sprintf("%s-credentials", conn.Name)))
+															Expect(conn.Status.ConnectionInfoRef).ShouldNot(BeNil())
+															Expect(conn.Status.ConnectionInfoRef.Name).Should(Equal(fmt.Sprintf("%s-configs", conn.Name)))
+															return true
+														}, timeout).Should(BeTrue())
+
+														By("checking the Secret of the Connection")
+														secret := &v1.Secret{
+															ObjectMeta: metav1.ObjectMeta{
+																Name:      conn.Status.CredentialsRef.Name,
+																Namespace: testNamespace,
+															},
+														}
+														err := k8sClient.Get(ctx, client.ObjectKeyFromObject(secret), secret)
+														Expect(err).ShouldNot(HaveOccurred())
+														secretOwner := metav1.GetControllerOf(secret)
+														Expect(secretOwner).ShouldNot(BeNil())
+														Expect(secretOwner.Kind).Should(Equal("RDSConnection"))
+														Expect(secretOwner.Name).Should(Equal(conn.Name))
+														Expect(secretOwner.Controller).ShouldNot(BeNil())
+														Expect(*secretOwner.Controller).Should(BeTrue())
+														Expect(secretOwner.BlockOwnerDeletion).ShouldNot(BeNil())
+														Expect(*secretOwner.BlockOwnerDeletion).Should(BeTrue())
+														user, userOk := secret.Data["username"]
+														Expect(userOk).Should(BeTrue())
+														Expect(string(user)).Should(Equal("user-connection-controller"))
+														password, passwordOk := secret.Data["password"]
+														Expect(passwordOk).Should(BeTrue())
+														Expect(string(password)).Should(Equal("testpassword"))
+
+														By("checking the ConfigMap of the Connection")
+														configmap := &v1.ConfigMap{
+															ObjectMeta: metav1.ObjectMeta{
+																Name:      conn.Status.ConnectionInfoRef.Name,
+																Namespace: testNamespace,
+															},
+														}
+														err = k8sClient.Get(ctx, client.ObjectKeyFromObject(configmap), configmap)
+														Expect(err).ShouldNot(HaveOccurred())
+														configmapOwner := metav1.GetControllerOf(configmap)
+														Expect(configmapOwner).ShouldNot(BeNil())
+														Expect(configmapOwner.Kind).Should(Equal("RDSConnection"))
+														Expect(configmapOwner.Name).Should(Equal(conn.Name))
+														Expect(configmapOwner.Controller).ShouldNot(BeNil())
+														Expect(*configmapOwner.Controller).Should(BeTrue())
+														Expect(configmapOwner.BlockOwnerDeletion).ShouldNot(BeNil())
+														Expect(*configmapOwner.BlockOwnerDeletion).Should(BeTrue())
+														t, typeOk := configmap.Data["type"]
+														Expect(typeOk).Should(BeTrue())
+														Expect(t).Should(Equal("postgresql"))
+														provider, providerOk := configmap.Data["provider"]
+														Expect(providerOk).Should(BeTrue())
+														Expect(provider).Should(Equal("Red Hat DBaaS / Amazon Relational Database Service (RDS)"))
+														host, hostOk := configmap.Data["host"]
+														Expect(hostOk).Should(BeTrue())
+														Expect(host).Should(Equal("address-connection-controller"))
+														port, portOk := configmap.Data["port"]
+														Expect(portOk).Should(BeTrue())
+														Expect(port).Should(Equal("9000"))
+														db, dbOk := configmap.Data["database"]
+														Expect(dbOk).Should(BeTrue())
+														Expect(db).Should(Equal("postgres"))
+													})
+												})
+											})
+										})
+									})
+								})
+							})
+						})
+					})
 				})
 			})
 		})

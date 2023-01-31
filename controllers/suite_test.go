@@ -69,7 +69,7 @@ const (
 const (
 	installNamespaceEnvVar = "INSTALL_NAMESPACE"
 	operatorConditionName  = "OPERATOR_CONDITION_NAME"
-	operatorConditionValue = "rds-dbaas-operator.v0.2.0"
+	operatorConditionValue = "rds-dbaas-operator.v0.3.0"
 )
 
 func TestAPIs(t *testing.T) {
@@ -189,9 +189,12 @@ var _ = BeforeSuite(func() {
 	inventoryReconciler := &controllers.RDSInventoryReconciler{
 		Client:                             mgr.GetClient(),
 		Scheme:                             mgr.GetScheme(),
-		GetDescribeDBInstancesPaginatorAPI: controllersrdstest.NewMockDescribeDBInstancesPaginator,
+		GetDescribeDBInstancesPaginatorAPI: controllersrdstest.NewDescribeDBInstancesPaginator,
 		GetModifyDBInstanceAPI:             controllersrdstest.NewModifyDBInstance,
 		GetDescribeDBInstancesAPI:          controllersrdstest.NewDescribeDBInstances,
+		GetDescribeDBClustersPaginatorAPI:  controllersrdstest.NewDescribeDBClustersPaginator,
+		GetModifyDBClusterAPI:              controllersrdstest.NewModifyDBCluster,
+		GetDescribeDBClustersAPI:           controllersrdstest.NewDescribeDBClusters,
 		ACKInstallNamespace:                testNamespace,
 		RDSCRDFilePath:                     filepath.Join("..", "rds", "config", "common", "bases"),
 		WaitForRDSControllerRetries:        10,

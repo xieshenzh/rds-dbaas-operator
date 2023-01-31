@@ -38,10 +38,11 @@ import (
 	dbaasv1beta1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1beta1"
 	rdsdbaasv1alpha1 "github.com/RHEcosystemAppEng/rds-dbaas-operator/api/v1alpha1"
 	rdsv1alpha1 "github.com/aws-controllers-k8s/rds-controller/apis/v1alpha1"
+	ackv1alpha1 "github.com/aws-controllers-k8s/runtime/apis/core/v1alpha1"
 )
 
 const (
-	instanceIDKey = ".spec.instanceID"
+	databaseServiceIDKey = ".spec.databaseServiceID"
 
 	databaseProvider = "Red Hat DBaaS / Amazon Relational Database Service (RDS)"
 
@@ -58,9 +59,10 @@ const (
 	connectionStatusMessageUpdating          = "Updating Connection"
 	connectionStatusMessageSecretError       = "Failed to create or update secret"
 	connectionStatusMessageConfigMapError    = "Failed to create or update configmap"
-	connectionStatusMessageInstanceNotFound  = "Instance not found"
-	connectionStatusMessageInstanceNotReady  = "Instance not ready"
-	connectionStatusMessageGetInstanceError  = "Failed to get Instance"
+	connectionStatusMessageServiceNotFound   = "Database service not found"
+	connectionStatusMessageServiceNotReady   = "Database service not ready"
+	connectionStatusMessageServiceNotValid   = "Database service not valid"
+	connectionStatusMessageGetServiceError   = "Failed to get Database service"
 	connectionStatusMessagePasswordNotFound  = "Password not found"
 	connectionStatusMessagePasswordInvalid   = "Password invalid"
 	connectionStatusMessageUsernameNotFound  = "Username not found"
@@ -81,6 +83,7 @@ type RDSConnectionReconciler struct {
 //+kubebuilder:rbac:groups=dbaas.redhat.com,resources=rdsconnections/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=dbaas.redhat.com,resources=rdsconnections/finalizers,verbs=update
 //+kubebuilder:rbac:groups=rds.services.k8s.aws,resources=dbinstances,verbs=get;list;watch
+//+kubebuilder:rbac:groups=rds.services.k8s.aws,resources=dbclusters,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=secrets;configmaps,verbs=get;list;watch;create;delete;update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -95,7 +98,14 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	var connection rdsdbaasv1alpha1.RDSConnection
 	var inventory rdsdbaasv1alpha1.RDSInventory
-	var dbInstance rdsv1alpha1.DBInstance
+	var dbService client.Object
+
+	var passwordSecret *ackv1alpha1.SecretKeyReference
+	var username *string
+	var host *string
+	var port *int64
+	var engine *string
+	var dbName *string
 
 	var masterUserSecret v1.Secret
 
@@ -143,47 +153,110 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}
 
-	checkDBInstanceStatus := func() bool {
-		var instanceName *string
-		for _, ins := range inventory.Status.Instances {
-			if ins.InstanceID == connection.Spec.InstanceID {
-				instanceName = &ins.Name
-				break
+	checkDBServiceStatus := func() bool {
+		var serviceName *string
+		var cType string
+		if connection.Spec.DatabaseServiceType != nil {
+			cType = string(*connection.Spec.DatabaseServiceType)
+		} else {
+			cType = instanceType
+		}
+		for _, ds := range inventory.Status.DatabaseServices {
+			if ds.ServiceID == connection.Spec.DatabaseServiceID {
+				var sType string
+				if ds.ServiceType != nil {
+					sType = string(*ds.ServiceType)
+				} else {
+					sType = instanceType
+				}
+				if cType == sType {
+					serviceName = &ds.ServiceName
+					break
+				}
 			}
 		}
-		if instanceName == nil {
-			e := fmt.Errorf("instance %s not found", connection.Spec.InstanceID)
-			logger.Error(e, "DB Instance not found from Inventory")
-			returnError(e, connectionStatusReasonNotFound, connectionStatusMessageInstanceNotFound)
+		if serviceName == nil {
+			var e error
+			if connection.Spec.DatabaseServiceType != nil {
+				e = fmt.Errorf("database service %s type %v not found", connection.Spec.DatabaseServiceID, *connection.Spec.DatabaseServiceType)
+			} else {
+				e = fmt.Errorf("database service %s not found", connection.Spec.DatabaseServiceID)
+			}
+			logger.Error(e, "DB Service not found from Inventory")
+			returnError(e, connectionStatusReasonNotFound, connectionStatusMessageServiceNotFound)
 			return true
 		}
 
+		if connection.Spec.DatabaseServiceType != nil && *connection.Spec.DatabaseServiceType == clusterType {
+			dbService = &rdsv1alpha1.DBCluster{}
+		} else {
+			dbService = &rdsv1alpha1.DBInstance{}
+		}
+
 		if e := r.Get(ctx, client.ObjectKey{Namespace: connection.Spec.InventoryRef.Namespace,
-			Name: *instanceName}, &dbInstance); e != nil {
-			logger.Error(e, "Failed to get DB Instance")
-			returnError(e, connectionStatusReasonBackendError, connectionStatusMessageGetInstanceError)
+			Name: *serviceName}, dbService); e != nil {
+			logger.Error(e, "Failed to get DB Service")
+			returnError(e, connectionStatusReasonBackendError, connectionStatusMessageGetServiceError)
 			return true
 		}
-		if dbInstance.Status.DBInstanceStatus == nil || *dbInstance.Status.DBInstanceStatus != "available" {
-			e := fmt.Errorf("instance %s not ready", connection.Spec.InstanceID)
-			logger.Error(e, "DB Instance not ready")
-			returnError(e, connectionStatusReasonUnreachable, connectionStatusMessageInstanceNotReady)
+
+		switch s := dbService.(type) {
+		case *rdsv1alpha1.DBCluster:
+			if s.Status.Status == nil || *s.Status.Status != "available" {
+				e := fmt.Errorf("cluster %s not ready", connection.Spec.DatabaseServiceID)
+				logger.Error(e, "DB Cluster not ready")
+				returnError(e, connectionStatusReasonUnreachable, connectionStatusMessageServiceNotReady)
+				return true
+			}
+		case *rdsv1alpha1.DBInstance:
+			if s.Status.DBInstanceStatus == nil || *s.Status.DBInstanceStatus != "available" {
+				e := fmt.Errorf("instance %s not ready", connection.Spec.DatabaseServiceID)
+				logger.Error(e, "DB Instance not ready")
+				returnError(e, connectionStatusReasonUnreachable, connectionStatusMessageServiceNotReady)
+				return true
+			}
+		default:
+			e := fmt.Errorf("DB service %s not valid", connection.Spec.DatabaseServiceID)
+			logger.Error(e, "DB service not valid")
+			returnError(e, connectionStatusReasonUnreachable, connectionStatusMessageServiceNotValid)
 			return true
 		}
+
 		return false
 	}
 
 	checkDBConnectionStatus := func() bool {
-		if dbInstance.Spec.MasterUserPassword == nil {
-			e := fmt.Errorf("instance %s master password not set", connection.Spec.InstanceID)
-			logger.Error(e, "DB Instance master password not set")
+		switch s := dbService.(type) {
+		case *rdsv1alpha1.DBCluster:
+			engine = s.Spec.Engine
+			passwordSecret = s.Spec.MasterUserPassword
+			username = s.Spec.MasterUsername
+			host = s.Status.Endpoint
+			port = s.Spec.Port
+			dbName = s.Spec.DatabaseName
+		case *rdsv1alpha1.DBInstance:
+			engine = s.Spec.Engine
+			passwordSecret = s.Spec.MasterUserPassword
+			username = s.Spec.MasterUsername
+			if s.Status.Endpoint != nil {
+				host = s.Status.Endpoint.Address
+				port = s.Status.Endpoint.Port
+			} else {
+				host = nil
+				port = nil
+			}
+			dbName = s.Spec.DBName
+		}
+
+		if passwordSecret == nil {
+			e := fmt.Errorf("service %s master password not set", connection.Spec.DatabaseServiceID)
+			logger.Error(e, "DB Service master password not set")
 			returnError(e, connectionStatusReasonInputError, connectionStatusMessagePasswordNotFound)
 			return true
 		}
 
-		if e := r.Get(ctx, client.ObjectKey{Namespace: dbInstance.Spec.MasterUserPassword.Namespace,
-			Name: dbInstance.Spec.MasterUserPassword.Name}, &masterUserSecret); e != nil {
-			logger.Error(e, "Failed to get secret for DB Instance master password")
+		if e := r.Get(ctx, client.ObjectKey{Namespace: passwordSecret.Namespace, Name: passwordSecret.Name}, &masterUserSecret); e != nil {
+			logger.Error(e, "Failed to get secret for DB Service master password")
 			if errors.IsNotFound(e) {
 				returnError(e, connectionStatusReasonNotFound, connectionStatusMessageGetPasswordError)
 			} else {
@@ -191,22 +264,22 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			}
 			return true
 		}
-		if v, ok := masterUserSecret.Data[dbInstance.Spec.MasterUserPassword.Key]; !ok || len(v) == 0 {
-			e := fmt.Errorf("instance %s master password key not set", connection.Spec.InstanceID)
-			logger.Error(e, "DB Instance master password key not set")
+		if v, ok := masterUserSecret.Data[passwordSecret.Key]; !ok || len(v) == 0 {
+			e := fmt.Errorf("service %s master password key not set", connection.Spec.DatabaseServiceID)
+			logger.Error(e, "DB Service master password key not set")
 			returnError(e, connectionStatusReasonInputError, connectionStatusMessagePasswordInvalid)
 			return true
 		}
-		if dbInstance.Spec.MasterUsername == nil {
-			e := fmt.Errorf("instance %s master username not set", connection.Spec.InstanceID)
-			logger.Error(e, "DB Instance master username not set")
+		if username == nil {
+			e := fmt.Errorf("service %s master username not set", connection.Spec.DatabaseServiceID)
+			logger.Error(e, "DB Service master username not set")
 			returnError(e, connectionStatusReasonInputError, connectionStatusMessageUsernameNotFound)
 			return true
 		}
 
-		if dbInstance.Status.Endpoint == nil {
-			e := fmt.Errorf("instance %s endpoint not found", connection.Spec.InstanceID)
-			logger.Error(e, "DB Instance endpoint not found")
+		if host == nil || port == nil {
+			e := fmt.Errorf("service %s endpoint not found", connection.Spec.DatabaseServiceID)
+			logger.Error(e, "DB Service endpoint not found")
 			returnError(e, connectionStatusReasonUnreachable, connectionStatusMessageEndpointNotFound)
 			return true
 		}
@@ -214,14 +287,14 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	syncConnectionStatus := func() bool {
-		userSecret, e := r.createOrUpdateSecret(ctx, &connection, &masterUserSecret, &dbInstance)
+		userSecret, e := r.createOrUpdateSecret(ctx, &connection, username, masterUserSecret.Data[passwordSecret.Key])
 		if e != nil {
 			logger.Error(e, "Failed to create or update secret for Connection")
 			returnError(e, connectionStatusReasonBackendError, connectionStatusMessageSecretError)
 			return true
 		}
 
-		dbConfigMap, e := r.createOrUpdateConfigMap(ctx, &connection, &dbInstance)
+		dbConfigMap, e := r.createOrUpdateConfigMap(ctx, &connection, engine, dbName, host, port)
 		if e != nil {
 			logger.Error(e, "Failed to create or update configmap for Connection")
 			returnError(e, connectionStatusReasonBackendError, connectionStatusMessageConfigMapError)
@@ -272,7 +345,7 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return
 	}
 
-	if checkDBInstanceStatus() {
+	if checkDBServiceStatus() {
 		return
 	}
 
@@ -289,7 +362,7 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 }
 
 func (r *RDSConnectionReconciler) createOrUpdateSecret(ctx context.Context, connection *rdsdbaasv1alpha1.RDSConnection,
-	dbSecret *v1.Secret, dbInstance *rdsv1alpha1.DBInstance) (*v1.Secret, error) {
+	username *string, password []byte) (*v1.Secret, error) {
 	secretName := fmt.Sprintf("%s-credentials", connection.Name)
 	secret := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -303,7 +376,7 @@ func (r *RDSConnectionReconciler) createOrUpdateSecret(ctx context.Context, conn
 		if err := ctrl.SetControllerReference(connection, secret, r.Scheme); err != nil {
 			return err
 		}
-		setSecret(secret, dbSecret, dbInstance)
+		setSecret(secret, username, password)
 		return nil
 	})
 	if err != nil {
@@ -312,16 +385,16 @@ func (r *RDSConnectionReconciler) createOrUpdateSecret(ctx context.Context, conn
 	return secret, nil
 }
 
-func setSecret(secret *v1.Secret, dbSecret *v1.Secret, dbInstance *rdsv1alpha1.DBInstance) {
+func setSecret(secret *v1.Secret, username *string, password []byte) {
 	data := map[string][]byte{
-		"username": []byte(*dbInstance.Spec.MasterUsername),
-		"password": dbSecret.Data[dbInstance.Spec.MasterUserPassword.Key],
+		"username": []byte(*username),
+		"password": password,
 	}
 	secret.Data = data
 }
 
 func (r *RDSConnectionReconciler) createOrUpdateConfigMap(ctx context.Context, connection *rdsdbaasv1alpha1.RDSConnection,
-	dbInstance *rdsv1alpha1.DBInstance) (*v1.ConfigMap, error) {
+	engine *string, dbName *string, host *string, port *int64) (*v1.ConfigMap, error) {
 	cmName := fmt.Sprintf("%s-configs", connection.Name)
 	cm := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -335,7 +408,7 @@ func (r *RDSConnectionReconciler) createOrUpdateConfigMap(ctx context.Context, c
 		if err := ctrl.SetControllerReference(connection, cm, r.Scheme); err != nil {
 			return err
 		}
-		setConfigMap(cm, dbInstance)
+		setConfigMap(cm, engine, dbName, host, port)
 		return nil
 	})
 	if err != nil {
@@ -344,40 +417,26 @@ func (r *RDSConnectionReconciler) createOrUpdateConfigMap(ctx context.Context, c
 	return cm, nil
 }
 
-func setConfigMap(cm *v1.ConfigMap, dbInstance *rdsv1alpha1.DBInstance) {
+func setConfigMap(cm *v1.ConfigMap, engine *string, dbName *string, host *string, port *int64) {
 	dataMap := map[string]string{
-		"type":     generateBindingType(*dbInstance.Spec.Engine),
+		"type":     generateBindingType(*engine),
 		"provider": databaseProvider,
-		"host":     *dbInstance.Status.Endpoint.Address,
-		"port":     strconv.FormatInt(*dbInstance.Status.Endpoint.Port, 10),
+		"host":     *host,
 	}
-	if dbInstance.Spec.DBName != nil {
-		dataMap["database"] = *dbInstance.Spec.DBName
-	} else if dbInstance.Spec.Engine != nil {
-		if dbName := getDefaultDBName(*dbInstance.Spec.Engine); dbName != nil {
-			dataMap["database"] = *dbName
+
+	if dbName != nil {
+		dataMap["database"] = *dbName
+	} else if engine != nil {
+		if dbn := getDefaultDBName(*engine); dbn != nil {
+			dataMap["database"] = *dbn
 		}
 	}
 
-	if dbInstance.Spec.Engine != nil {
-		host := dataMap["host"]
-		port := dataMap["port"]
-		db, dbOk := dataMap["database"]
-
-		switch *dbInstance.Spec.Engine {
-		case oracleSe2, oracleSe2Cdb, oracleEe, oracleEeCdb, customOracleEe:
-			if dbOk {
-				dataMap["jdbc-url"] = fmt.Sprintf("jdbc:oracle:thin:@%s:%s/%s", host, port, db)
-			} else {
-				dataMap["jdbc-url"] = fmt.Sprintf("jdbc:oracle:thin:@%s:%s", host, port)
-			}
-		case sqlserverEe, sqlserverSe, sqlserverEx, sqlserverWeb, customSqlserverEe, customSqlserverSe, customSqlserverWeb:
-			if dbOk {
-				dataMap["jdbc-url"] = fmt.Sprintf("jdbc:sqlserver://%s:%s;databaseName=%s", host, port, db)
-			} else {
-				dataMap["jdbc-url"] = fmt.Sprintf("jdbc:sqlserver://%s:%s", host, port)
-			}
-		default:
+	if port != nil {
+		dataMap["port"] = strconv.FormatInt(*port, 10)
+	} else if engine != nil {
+		if p := getDefaultDBPort(*engine); p != nil {
+			dataMap["port"] = strconv.FormatInt(*p, 10)
 		}
 	}
 
@@ -414,13 +473,19 @@ func (r *RDSConnectionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				return getInstanceConnectionRequests(o, mgr)
 			}),
 		).
+		Watches(
+			&source.Kind{Type: &rdsv1alpha1.DBCluster{}},
+			handler.EnqueueRequestsFromMapFunc(func(o client.Object) []reconcile.Request {
+				return getInstanceConnectionRequests(o, mgr)
+			}),
+		).
 		Complete(r); err != nil {
 		return err
 	}
 
-	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &rdsdbaasv1alpha1.RDSConnection{}, instanceIDKey, func(rawObj client.Object) []string {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &rdsdbaasv1alpha1.RDSConnection{}, databaseServiceIDKey, func(rawObj client.Object) []string {
 		connection := rawObj.(*rdsdbaasv1alpha1.RDSConnection)
-		instanceID := connection.Spec.InstanceID
+		instanceID := connection.Spec.DatabaseServiceID
 		return []string{instanceID}
 	}); err != nil {
 		return err
@@ -434,22 +499,32 @@ func getInstanceConnectionRequests(object client.Object, mgr ctrl.Manager) []rec
 	logger := log.FromContext(ctx)
 	cli := mgr.GetClient()
 
-	dbInstance := object.(*rdsv1alpha1.DBInstance)
 	connectionList := &rdsdbaasv1alpha1.RDSConnectionList{}
-	if e := cli.List(ctx, connectionList, client.MatchingFields{instanceIDKey: *dbInstance.Spec.DBInstanceIdentifier}); e != nil {
-		logger.Error(e, "Failed to get Connections for DB Instance update", "DBInstance ID", dbInstance.Spec.DBInstanceIdentifier)
-		return nil
+	var namespace string
+	switch s := object.(type) {
+	case *rdsv1alpha1.DBCluster:
+		if e := cli.List(ctx, connectionList, client.MatchingFields{databaseServiceIDKey: *s.Spec.DBClusterIdentifier}); e != nil {
+			logger.Error(e, "Failed to get Connections for DB Cluster update", "DBCluster ID", s.Spec.DBClusterIdentifier)
+			return nil
+		}
+		namespace = s.Namespace
+	case *rdsv1alpha1.DBInstance:
+		if e := cli.List(ctx, connectionList, client.MatchingFields{databaseServiceIDKey: *s.Spec.DBInstanceIdentifier}); e != nil {
+			logger.Error(e, "Failed to get Connections for DB Instance update", "DBInstance ID", s.Spec.DBInstanceIdentifier)
+			return nil
+		}
+		namespace = s.Namespace
 	}
 
 	var requests []reconcile.Request
 	for _, c := range connectionList.Items {
 		match := false
 		if len(c.Spec.InventoryRef.Namespace) > 0 {
-			if c.Spec.InventoryRef.Namespace == dbInstance.Namespace {
+			if c.Spec.InventoryRef.Namespace == namespace {
 				match = true
 			}
 		} else {
-			if c.Namespace == dbInstance.Namespace {
+			if c.Namespace == namespace {
 				match = true
 			}
 		}

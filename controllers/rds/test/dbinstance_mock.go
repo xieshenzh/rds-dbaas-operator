@@ -70,6 +70,13 @@ var inventoryTestDBInstances = []*rds.DescribeDBInstancesOutput{
 				Engine:               pointer.String("mysql"),
 				DBInstanceArn:        pointer.String("mock-db-instance-5"),
 			},
+			// DB instance exists, not adopted
+			{
+				DBInstanceIdentifier: pointer.String("mock-db-instance-6"),
+				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("mysql"),
+				DBInstanceArn:        pointer.String("mock-db-instance-6"),
+			},
 			// Adopted successfully
 			{
 				DBInstanceIdentifier: pointer.String("mock-db-instance-7"),
@@ -83,13 +90,6 @@ var inventoryTestDBInstances = []*rds.DescribeDBInstancesOutput{
 				DBInstanceStatus:     pointer.String("available"),
 				Engine:               pointer.String("mysql"),
 				DBInstanceArn:        pointer.String("mock-db-instance-8"),
-			},
-			// DB instance exists, not adopted
-			{
-				DBInstanceIdentifier: pointer.String("mock-db-instance-9"),
-				DBInstanceStatus:     pointer.String("available"),
-				Engine:               pointer.String("mysql"),
-				DBInstanceArn:        pointer.String("mock-db-instance-9"),
 			},
 		},
 	},
@@ -137,16 +137,18 @@ var inventoryTestDBInstances = []*rds.DescribeDBInstancesOutput{
 		// Cluster not supported
 		DBInstances: []types.DBInstance{
 			{
-				DBInstanceIdentifier: pointer.String("mock-db-cluster-1"),
+				DBInstanceIdentifier: pointer.String("mock-db-instance-cluster-1"),
 				DBInstanceStatus:     pointer.String("available"),
 				Engine:               pointer.String("mysql"),
-				DBInstanceArn:        pointer.String("mock-db-cluster-1"),
+				DBInstanceArn:        pointer.String("mock-db-instance-cluster-1"),
+				DBClusterIdentifier:  pointer.String("mock-db-instance-cluster-1"),
 			},
 			{
-				DBInstanceIdentifier: pointer.String("mock-db-cluster-2"),
+				DBInstanceIdentifier: pointer.String("mock-db-instance-cluster-2"),
 				DBInstanceStatus:     pointer.String("available"),
 				Engine:               pointer.String("postgres"),
-				DBInstanceArn:        pointer.String("mock-db-cluster-2"),
+				DBInstanceArn:        pointer.String("mock-db-instance-cluster-2"),
+				DBClusterIdentifier:  pointer.String("mock-db-instance-cluster-2"),
 			},
 		},
 	},
@@ -235,10 +237,10 @@ type mockDescribeDBInstancesPaginator struct {
 	counter                      int
 }
 
-func NewMockDescribeDBInstancesPaginator(accessKey, secretKey, region string) controllersrds.DescribeDBInstancesPaginatorAPI {
+func NewDescribeDBInstancesPaginator(accessKey, secretKey, region string) controllersrds.DescribeDBInstancesPaginatorAPI {
 	counter := 0
 	if strings.HasSuffix(accessKey, InventoryControllerTestAccessKeySuffix) {
-		counter = 3
+		counter = 5
 	} else if strings.HasSuffix(accessKey, ConnectionControllerTestAccessKeySuffix) {
 		counter = 1
 	}

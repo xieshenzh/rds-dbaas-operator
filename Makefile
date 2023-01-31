@@ -1,7 +1,7 @@
 CONTAINER_ENGINE?=docker
 
 OPM_VERSION ?= v1.26.2
-OPERATOR_SDK_VERSION ?= v1.25.2
+OPERATOR_SDK_VERSION ?= v1.25.4
 
 # VERSION defines the project version for the bundle.
 # Update this value when you upgrade the version of your project.
