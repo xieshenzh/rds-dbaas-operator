@@ -270,6 +270,8 @@ var _ = BeforeSuite(func() {
 }, 60)
 
 var _ = AfterSuite(func() {
+	assertACKControllerStopped()
+
 	cancel()
 	By("tearing down the test environment")
 	err := testEnv.Stop()
@@ -323,4 +325,52 @@ func assertResourceDeletionIfExist(object client.Object) func() {
 
 		assertResourceDeletion(object)()
 	}
+}
+
+func assertACKControllerStopped() {
+	By("checking if all inventories are deleted")
+	Eventually(func() bool {
+		inventoryList := &rdsdbaasv1alpha1.RDSInventoryList{}
+		if err := k8sClient.List(ctx, inventoryList); err != nil {
+			return false
+		}
+		if len(inventoryList.Items) > 0 {
+			return false
+		}
+		return true
+	}, timeout).Should(BeTrue())
+
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ack-rds-controller",
+			Namespace: testNamespace,
+		},
+	}
+	By("checking if the replica is 0 and update it to 1")
+	Eventually(func() bool {
+		if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
+			return false
+		}
+
+		if deployment.Spec.Replicas == nil || *deployment.Spec.Replicas != 0 {
+			return false
+		}
+
+		deployment.Spec.Replicas = pointer.Int32(1)
+		if err := k8sClient.Update(ctx, deployment); err != nil {
+			return false
+		}
+		return true
+	}, timeout).Should(BeTrue())
+
+	By("checking if the replica is updated to 0 again")
+	Eventually(func() bool {
+		if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
+			return false
+		}
+		if deployment.Spec.Replicas == nil || *deployment.Spec.Replicas != 0 {
+			return false
+		}
+		return true
+	}, timeout).Should(BeTrue())
 }

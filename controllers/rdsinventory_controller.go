@@ -927,6 +927,22 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return false, services
 	}
 
+	if len(req.NamespacedName.Name) == 0 && req.NamespacedName.Namespace == r.ACKInstallNamespace {
+		inventoryList := &rdsdbaasv1alpha1.RDSInventoryList{}
+		if err := r.List(ctx, inventoryList); err != nil {
+			logger.Error(err, "Failed to check Inventories for ACK controller update")
+			return ctrl.Result{}, err
+		}
+		if len(inventoryList.Items) == 0 {
+			logger.Info("Deployment of the ACk controller is updated when no Inventory exists, stop the ACK controller")
+			if err := r.stopRDSController(ctx, r.Client, false); err != nil {
+				logger.Error(err, "Failed to stop the ACK controller")
+				return ctrl.Result{}, err
+			}
+		}
+		return ctrl.Result{}, nil
+	}
+
 	if err = r.Get(ctx, req.NamespacedName, &inventory); err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("RDS Inventory resource not found, has been deleted")
@@ -1295,11 +1311,21 @@ func getACKDeploymentInventoryRequests(object client.Object, namespace string, m
 			return nil
 		}
 
-		for _, i := range inventoryList.Items {
+		if len(inventoryList.Items) > 0 {
+			for _, i := range inventoryList.Items {
+				requests = append(requests, reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Namespace: i.Namespace,
+						Name:      i.Name,
+					},
+				})
+			}
+		} else {
+			// Deployment of the ACK controller is updated but no Inventory exists, scale down the Deployment
 			requests = append(requests, reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Namespace: i.Namespace,
-					Name:      i.Name,
+					Namespace: namespace,
+					Name:      "",
 				},
 			})
 		}
