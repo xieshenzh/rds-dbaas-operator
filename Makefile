@@ -10,7 +10,7 @@ OPERATOR_SDK_VERSION ?= v1.25.4
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 0.3.0
 
-RDS_VERSION ?= 0.1.2
+RDS_VERSION ?= 0.1.3
 
 # QUAY_ORG indicates the organization that docker images will be build for & pushed to
 # CHANGE THIS TO YOUR OWN QUAY USERNAME FOR DEV/TESTING/PUSHING

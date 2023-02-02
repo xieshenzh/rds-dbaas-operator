@@ -4,8 +4,8 @@ go 1.18
 
 require (
 	github.com/RHEcosystemAppEng/dbaas-operator v1.0.1-0.20230201214058-de695c3b08cc
-	github.com/aws-controllers-k8s/rds-controller v0.1.2
-	github.com/aws-controllers-k8s/runtime v0.21.0
+	github.com/aws-controllers-k8s/rds-controller v0.1.3
+	github.com/aws-controllers-k8s/runtime v0.23.0
 	github.com/aws/aws-sdk-go-v2 v1.16.16
 	github.com/aws/aws-sdk-go-v2/credentials v1.12.21
 	github.com/aws/aws-sdk-go-v2/service/rds v1.26.1

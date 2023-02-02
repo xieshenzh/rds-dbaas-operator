@@ -75,10 +75,10 @@ github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf/go.mod h1:ybxpYRF
 github.com/alecthomas/units v0.0.0-20190717042225-c3de453c63f4/go.mod h1:ybxpYRFXyAe+OPACYpWeL0wqObRcbAqCMya13uyzqw0=
 github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d/go.mod h1:rBZYJk541a8SKzHPHnH3zbiI+7dagKZ0cgpgrD7Fyho=
 github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kdvxnR2qWY=
-github.com/aws-controllers-k8s/rds-controller v0.1.2 h1:N5oz9yHWwh0XjldG/l+dN0awrtj9ae6VuTKcGZO6sM8=
-github.com/aws-controllers-k8s/rds-controller v0.1.2/go.mod h1:slIajcRHOL+h7fbwpcS/khjlJMy5ESNqU1/T705oE70=
-github.com/aws-controllers-k8s/runtime v0.21.0 h1:e9DK88QodwXMLz+QXPXk+8XNetVj4ij+puaVwn9uEVc=
-github.com/aws-controllers-k8s/runtime v0.21.0/go.mod h1:k7z4qlf6aK1Kzd4ff49wzcyhDKHjWaUpqxrwgl4uS1o=
+github.com/aws-controllers-k8s/rds-controller v0.1.3 h1:iZ9X55637XUrTPEMI6qhkRrGZKguQj8mDpRqRvJGnhU=
+github.com/aws-controllers-k8s/rds-controller v0.1.3/go.mod h1:7vcmUfUueGM6GPHZEm9c6jceyvCYasBs9q4NyDAu2lc=
+github.com/aws-controllers-k8s/runtime v0.23.0 h1:xM/zKyFzqbSr4gN9/cMRyjUUEEezHB0inpcsSV5clkg=
+github.com/aws-controllers-k8s/runtime v0.23.0/go.mod h1:vBsKxMSP7Ya2Mv5KPGadu6OuIESTX+YIZB/2dOV7gXo=
 github.com/aws/aws-sdk-go v1.44.93 h1:hAgd9fuaptBatSft27/5eBMdcA8+cIMqo96/tZ6rKl8=
 github.com/aws/aws-sdk-go v1.44.93/go.mod h1:y4AeaBuwd2Lk+GepC1E9v0qOiTws0MIWAX4oIKwKHZo=
 github.com/aws/aws-sdk-go-v2 v1.16.16 h1:M1fj4FE2lB4NzRb9Y0xdWsn2P0+2UHVxwKyOa4YJNjk=
