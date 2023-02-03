@@ -10,7 +10,7 @@ OPERATOR_SDK_VERSION ?= v1.25.4
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 0.3.0
 
-RDS_VERSION ?= 0.1.2
+RDS_VERSION ?= 0.1.3
 
 # QUAY_ORG indicates the organization that docker images will be build for & pushed to
 # CHANGE THIS TO YOUR OWN QUAY USERNAME FOR DEV/TESTING/PUSHING
@@ -265,16 +265,16 @@ catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
 
 .PHONY: rds-crds-update
-RDS_TEMP = ./rds/temp
-RDS_CONFIG = ./rds/config
+RDS_TEMP = ./controllers/yaml/temp
+RDS_CONFIG = ./controllers/yaml/rds
 rds-crds-update: ## Download and update the additional RDS CRDs for extra RDS features.
 	mkdir -p $(dir $(RDS_TEMP))
 	curl -sSLo $(RDS_TEMP)/v$(RDS_VERSION).zip https://github.com/aws-controllers-k8s/rds-controller/archive/refs/tags/v$(RDS_VERSION).zip
 	unzip -o -q -j $(RDS_TEMP)/v$(RDS_VERSION).zip "rds-controller-$(RDS_VERSION)/config/crd/common/bases/*" -d "$(RDS_CONFIG)/common/bases/"
 
 .PHONY: rds-crds-clean
-RDS_TEMP = ./rds/temp
-RDS_CONFIG = ./rds/config
+RDS_TEMP = ./controllers/yaml/temp
+RDS_CONFIG = ./controllers/yaml/rds
 rds-crds-clean: ## Cleanup the RDS CRD files.
 	find $(RDS_CONFIG) -type f -delete
 	rm $(RDS_TEMP)/v$(RDS_VERSION).zip
