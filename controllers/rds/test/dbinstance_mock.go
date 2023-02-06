@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"k8s.io/utils/pointer"
 
@@ -27,6 +28,16 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
 )
+
+var inventoryTestDBInstanceCounter int32 = 6
+
+func GetInventoryTestDBInstanceCounter() int32 {
+	return atomic.LoadInt32(&inventoryTestDBInstanceCounter)
+}
+
+func SetInventoryTestDBInstanceCounter(counter int32) {
+	atomic.StoreInt32(&inventoryTestDBInstanceCounter, counter)
+}
 
 var inventoryTestDBInstances = []*rds.DescribeDBInstancesOutput{
 	{
@@ -199,6 +210,17 @@ var inventoryTestDBInstances = []*rds.DescribeDBInstancesOutput{
 			},
 		},
 	},
+	{
+		// To be deleted
+		DBInstances: []types.DBInstance{
+			{
+				DBInstanceIdentifier: pointer.String("mock-db-instance-delete-1"),
+				DBInstanceStatus:     pointer.String("available"),
+				Engine:               pointer.String("postgres"),
+				DBInstanceArn:        pointer.String("mock-db-instance-delete-1"),
+			},
+		},
+	},
 }
 
 var connectionTestDBInstances = []*rds.DescribeDBInstancesOutput{
@@ -240,7 +262,7 @@ type mockDescribeDBInstancesPaginator struct {
 func NewDescribeDBInstancesPaginator(accessKey, secretKey, region string) controllersrds.DescribeDBInstancesPaginatorAPI {
 	counter := 0
 	if strings.HasSuffix(accessKey, InventoryControllerTestAccessKeySuffix) {
-		counter = 5
+		counter = int(GetInventoryTestDBInstanceCounter())
 	} else if strings.HasSuffix(accessKey, ConnectionControllerTestAccessKeySuffix) {
 		counter = 1
 	}

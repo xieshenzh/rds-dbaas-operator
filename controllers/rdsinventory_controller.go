@@ -83,6 +83,8 @@ const (
 	inventoryStatusMessageUpdateError              = "Failed to update Inventory"
 	inventoryStatusMessageGetInstancesError        = "Failed to get Instances"
 	inventoryStatusMessageGetClustersError         = "Failed to get clusters"
+	inventoryStatusMessageDeleteInstancesError     = "Failed to delete Instances"
+	inventoryStatusMessageDeleteClustersError      = "Failed to delete clusters"
 	inventoryStatusMessageAdoptInstanceError       = "Failed to adopt DB Instance"
 	inventoryStatusMessageAdoptClusterError        = "Failed to adopt DB Cluster"
 	inventoryStatusMessageUpdateInstanceError      = "Failed to update DB Instance"
@@ -124,9 +126,9 @@ type RDSInventoryReconciler struct {
 //+kubebuilder:rbac:groups=dbaas.redhat.com,resources=rdsinventories,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=dbaas.redhat.com,resources=rdsinventories/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=dbaas.redhat.com,resources=rdsinventories/finalizers,verbs=update
-//+kubebuilder:rbac:groups=rds.services.k8s.aws,resources=dbinstances,verbs=get;list;watch;update
+//+kubebuilder:rbac:groups=rds.services.k8s.aws,resources=dbinstances,verbs=get;list;watch;update;delete
 //+kubebuilder:rbac:groups=rds.services.k8s.aws,resources=dbinstances/finalizers,verbs=update
-//+kubebuilder:rbac:groups=rds.services.k8s.aws,resources=dbclusters,verbs=get;list;watch;update
+//+kubebuilder:rbac:groups=rds.services.k8s.aws,resources=dbclusters,verbs=get;list;watch;update;delete
 //+kubebuilder:rbac:groups=rds.services.k8s.aws,resources=dbclusters/finalizers,verbs=update
 //+kubebuilder:rbac:groups=services.k8s.aws,resources=adoptedresources,verbs=get;list;watch;create;delete;update
 //+kubebuilder:rbac:groups="",resources=secrets;configmaps,verbs=get;list;watch;create;delete;update
@@ -503,6 +505,21 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetInstancesError)
 			return true, false
 		}
+
+		adoptedResourceList := &ackv1alpha1.AdoptedResourceList{}
+		if e := r.List(ctx, adoptedResourceList, client.InNamespace(inventory.Namespace),
+			client.MatchingLabels(map[string]string{adoptedDBResourceLabelKey: adoptedDBResourceLabelValue})); e != nil {
+			logger.Error(e, "Failed to read adopted Resources of the Inventory that are created by the operator")
+			returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetInstancesError)
+			return true, false
+		}
+		adoptedDBInstanceMap := make(map[string]ackv1alpha1.AdoptedResource, len(adoptedResourceList.Items))
+		for _, adoptedDBInstance := range adoptedResourceList.Items {
+			if adoptedDBInstance.Spec.AWS != nil && adoptedDBInstance.Spec.AWS.ARN != nil {
+				adoptedDBInstanceMap[string(*adoptedDBInstance.Spec.AWS.ARN)] = adoptedDBInstance
+			}
+		}
+
 		modifyDBInstance := r.GetModifyDBInstanceAPI(accessKey, secretKey, region)
 		waitForAdoptedResource := false
 		for i := range adoptedDBInstanceList.Items {
@@ -527,6 +544,23 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			}
 			awsDBInstance, awsOk := awsDBInstanceMap[string(*adoptedDBInstance.Status.ACKResourceMetadata.ARN)]
 			if !awsOk {
+				if e := r.Delete(ctx, &adoptedDBInstance); e != nil {
+					if !errors.IsNotFound(e) {
+						logger.Error(e, "Failed to delete obsolete adopted DB Instance", "DB Instance", adoptedDBInstance)
+						returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageDeleteInstancesError)
+						return true, false
+					}
+				}
+				if instance, ok := adoptedDBInstanceMap[string(*adoptedDBInstance.Status.ACKResourceMetadata.ARN)]; ok {
+					if e := r.Delete(ctx, &instance); e != nil {
+						if !errors.IsNotFound(e) {
+							logger.Error(e, "Failed to delete adopting resource", "DB Instance", adoptedDBInstance)
+							returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageDeleteInstancesError)
+							return true, false
+						}
+					}
+				}
+				logger.Info("Deleted adopted DB Instance that is obsolete", "DB Cluster", adoptedDBInstance)
 				continue
 			}
 
@@ -730,6 +764,21 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetClustersError)
 			return true, false
 		}
+
+		adoptedResourceList := &ackv1alpha1.AdoptedResourceList{}
+		if e := r.List(ctx, adoptedResourceList, client.InNamespace(inventory.Namespace),
+			client.MatchingLabels(map[string]string{adoptedDBResourceLabelKey: adoptedDBResourceLabelValue})); e != nil {
+			logger.Error(e, "Failed to read adopted Resources of the Inventory that are created by the operator")
+			returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageGetClustersError)
+			return true, false
+		}
+		adoptedDBClusterMap := make(map[string]ackv1alpha1.AdoptedResource, len(adoptedResourceList.Items))
+		for _, adoptedDBCluster := range adoptedResourceList.Items {
+			if adoptedDBCluster.Spec.AWS != nil && adoptedDBCluster.Spec.AWS.ARN != nil {
+				adoptedDBClusterMap[string(*adoptedDBCluster.Spec.AWS.ARN)] = adoptedDBCluster
+			}
+		}
+
 		modifyDBCluster := r.GetModifyDBClusterAPI(accessKey, secretKey, region)
 		waitForAdoptedResource := false
 		for i := range adoptedDBClusterList.Items {
@@ -752,6 +801,23 @@ func (r *RDSInventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			}
 			awsDBCluster, awsOk := awsDBClusterMap[string(*adoptedDBCluster.Status.ACKResourceMetadata.ARN)]
 			if !awsOk {
+				if e := r.Delete(ctx, &adoptedDBCluster); e != nil {
+					if !errors.IsNotFound(e) {
+						logger.Error(e, "Failed to delete obsolete adopted DB Cluster", "DB Cluster", adoptedDBCluster)
+						returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageDeleteClustersError)
+						return true, false
+					}
+				}
+				if cluster, ok := adoptedDBClusterMap[string(*adoptedDBCluster.Status.ACKResourceMetadata.ARN)]; ok {
+					if e := r.Delete(ctx, &cluster); e != nil {
+						if !errors.IsNotFound(e) {
+							logger.Error(e, "Failed to delete adopting resource", "DB Cluster", adoptedDBCluster)
+							returnError(e, inventoryStatusReasonBackendError, inventoryStatusMessageDeleteClustersError)
+							return true, false
+						}
+					}
+				}
+				logger.Info("Deleted adopted DB Cluster that is obsolete", "DB Cluster", adoptedDBCluster)
 				continue
 			}
 
@@ -1198,6 +1264,9 @@ func createAdoptedResource(resourceIdentifier *string, resourceArn *string, engi
 				"owner":           inventory.Name,
 				"owner.kind":      inventory.Kind,
 				"owner.namespace": inventory.Namespace,
+			},
+			Labels: map[string]string{
+				adoptedDBResourceLabelKey: adoptedDBResourceLabelValue,
 			},
 		},
 		Spec: ackv1alpha1.AdoptedResourceSpec{

@@ -234,6 +234,7 @@ spec:
           resources:
           - dbclusters
           verbs:
+          - delete
           - get
           - list
           - update

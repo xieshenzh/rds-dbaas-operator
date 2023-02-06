@@ -142,6 +142,7 @@ rules:
   resources:
   - dbclusters
   verbs:
+  - delete
   - get
   - list
   - update

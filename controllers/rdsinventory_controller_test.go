@@ -600,7 +600,7 @@ var _ = Describe("RDSInventoryController", func() {
 				},
 			}
 			BeforeEach(assertResourceCreation(dbInstance14))
-			AfterEach(assertResourceDeletion(dbInstance14))
+			AfterEach(assertResourceDeletionIfExist(dbInstance14))
 			BeforeEach(func() {
 				Eventually(func() bool {
 					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance14), dbInstance14); err != nil {
@@ -636,7 +636,7 @@ var _ = Describe("RDSInventoryController", func() {
 				},
 			}
 			BeforeEach(assertResourceCreation(dbInstance15))
-			AfterEach(assertResourceDeletion(dbInstance15))
+			AfterEach(assertResourceDeletionIfExist(dbInstance15))
 			BeforeEach(func() {
 				Eventually(func() bool {
 					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance15), dbInstance15); err != nil {
@@ -1314,7 +1314,7 @@ var _ = Describe("RDSInventoryController", func() {
 				},
 			}
 			BeforeEach(assertResourceCreation(dbCluster19))
-			AfterEach(assertResourceDeletion(dbCluster19))
+			AfterEach(assertResourceDeletionIfExist(dbCluster19))
 			BeforeEach(func() {
 				Eventually(func() bool {
 					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbCluster19), dbCluster19); err != nil {
@@ -1350,7 +1350,7 @@ var _ = Describe("RDSInventoryController", func() {
 				},
 			}
 			BeforeEach(assertResourceCreation(dbCluster20))
-			AfterEach(assertResourceDeletion(dbCluster20))
+			AfterEach(assertResourceDeletionIfExist(dbCluster20))
 			BeforeEach(func() {
 				Eventually(func() bool {
 					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbCluster20), dbCluster20); err != nil {
@@ -2611,7 +2611,7 @@ var _ = Describe("RDSInventoryController", func() {
 							return true
 						}, timeout).Should(BeTrue())
 
-						By("checking if the username and password of adopted db instance is not reset when the instance not exist in AWS")
+						By("checking if the adopted db instance is deleted when the instance not exist in AWS")
 						dbInstance14 := &rdsv1alpha1.DBInstance{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      "db-instance-inventory-controller-14",
@@ -2625,20 +2625,10 @@ var _ = Describe("RDSInventoryController", func() {
 							},
 						}
 						Consistently(func() bool {
-							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance14), dbInstance14); err != nil {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance14), dbInstance14); err == nil || !errors.IsNotFound(err) {
 								return false
 							}
-							if dbInstance14.Spec.DBName != nil {
-								return false
-							}
-							if dbInstance14.Spec.MasterUsername != nil {
-								return false
-							}
-							if dbInstance14.Spec.MasterUserPassword != nil {
-								return false
-							}
-							err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret14), dbSecret14)
-							if err == nil || !errors.IsNotFound(err) {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret14), dbSecret14); err == nil || !errors.IsNotFound(err) {
 								return false
 							}
 							return true
@@ -2657,20 +2647,10 @@ var _ = Describe("RDSInventoryController", func() {
 							},
 						}
 						Consistently(func() bool {
-							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance15), dbInstance15); err != nil {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbInstance15), dbInstance15); err == nil || !errors.IsNotFound(err) {
 								return false
 							}
-							if dbInstance15.Spec.DBName != nil {
-								return false
-							}
-							if dbInstance15.Spec.MasterUsername != nil {
-								return false
-							}
-							if dbInstance15.Spec.MasterUserPassword != nil {
-								return false
-							}
-							err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret15), dbSecret15)
-							if err == nil || !errors.IsNotFound(err) {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbSecret15), dbSecret15); err == nil || !errors.IsNotFound(err) {
 								return false
 							}
 							return true
@@ -3043,7 +3023,7 @@ var _ = Describe("RDSInventoryController", func() {
 							return true
 						}, timeout).Should(BeTrue())
 
-						By("checking if the username and password of adopted db cluster is not reset when the cluster not exist in AWS")
+						By("checking if the adopted db cluster is deleted when the cluster not exist in AWS")
 						dbCluster19 := &rdsv1alpha1.DBCluster{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      "db-cluster-inventory-controller-19",
@@ -3057,20 +3037,10 @@ var _ = Describe("RDSInventoryController", func() {
 							},
 						}
 						Consistently(func() bool {
-							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbCluster19), dbCluster19); err != nil {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbCluster19), dbCluster19); err == nil || !errors.IsNotFound(err) {
 								return false
 							}
-							if dbCluster19.Spec.DatabaseName != nil {
-								return false
-							}
-							if dbCluster19.Spec.MasterUsername != nil {
-								return false
-							}
-							if dbCluster19.Spec.MasterUserPassword != nil {
-								return false
-							}
-							err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbcSecret19), dbcSecret19)
-							if err == nil || !errors.IsNotFound(err) {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbcSecret19), dbcSecret19); err == nil || !errors.IsNotFound(err) {
 								return false
 							}
 							return true
@@ -3089,20 +3059,10 @@ var _ = Describe("RDSInventoryController", func() {
 							},
 						}
 						Consistently(func() bool {
-							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbCluster20), dbCluster20); err != nil {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbCluster20), dbCluster20); err == nil || !errors.IsNotFound(err) {
 								return false
 							}
-							if dbCluster20.Spec.DatabaseName != nil {
-								return false
-							}
-							if dbCluster20.Spec.MasterUsername != nil {
-								return false
-							}
-							if dbCluster20.Spec.MasterUserPassword != nil {
-								return false
-							}
-							err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbcSecret20), dbcSecret20)
-							if err == nil || !errors.IsNotFound(err) {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(dbcSecret20), dbcSecret20); err == nil || !errors.IsNotFound(err) {
 								return false
 							}
 							return true
@@ -3524,6 +3484,221 @@ var _ = Describe("RDSInventoryController", func() {
 							}
 							return true
 						}, timeout).Should(BeTrue())
+					})
+
+					Context("when instances and clusters are deleted from AWS", func() {
+						mockDeleteDBInstance1 := &rdsv1alpha1.DBInstance{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "rhoda-adopted-postgres-mock-db-instance-delete-1",
+								Namespace: testNamespace,
+								Labels: map[string]string{
+									"rds.dbaas.redhat.com/adopted": "true",
+								},
+							},
+							Spec: rdsv1alpha1.DBInstanceSpec{
+								Engine:               pointer.String("postgres"),
+								DBInstanceIdentifier: pointer.String("mock-db-instance-delete-1"),
+								DBInstanceClass:      pointer.String("db.t3.micro"),
+							},
+						}
+						AfterEach(assertResourceDeletionIfExist(mockDeleteDBInstance1))
+
+						mockDeleteDBCluster1 := &rdsv1alpha1.DBCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "rhoda-adopted-postgres-mock-db-cluster-delete-1",
+								Namespace: testNamespace,
+								Labels: map[string]string{
+									"rds.dbaas.redhat.com/adopted": "true",
+								},
+							},
+							Spec: rdsv1alpha1.DBClusterSpec{
+								Engine:                 pointer.String("postgres"),
+								DBClusterIdentifier:    pointer.String("mock-db-cluster-delete-1"),
+								DBClusterInstanceClass: pointer.String("db.t3.micro"),
+							},
+						}
+						AfterEach(assertResourceDeletionIfExist(mockDeleteDBCluster1))
+
+						It("should delete adopted resource when the resource is deleted from AWS", func() {
+							By("checking if the resources are adopted")
+							Eventually(func() bool {
+								adoptedDBResources := &ackv1alpha1.AdoptedResourceList{}
+								if err := k8sClient.List(ctx, adoptedDBResources, client.InNamespace(testNamespace)); err != nil {
+									return false
+								}
+
+								dbResourcesMap := map[string]ackv1alpha1.AdoptedResource{}
+								for i := range adoptedDBResources.Items {
+									resource := adoptedDBResources.Items[i]
+									dbResourcesMap[resource.Spec.AWS.NameOrID] = resource
+								}
+
+								if _, ok := dbResourcesMap["mock-db-instance-1"]; !ok {
+									return false
+								}
+								if _, ok := dbResourcesMap["mock-db-instance-2"]; !ok {
+									return false
+								}
+								if _, ok := dbResourcesMap["mock-db-instance-3"]; !ok {
+									return false
+								}
+								if _, ok := dbResourcesMap["mock-db-instance-4"]; !ok {
+									return false
+								}
+								if _, ok := dbResourcesMap["mock-db-instance-7"]; !ok {
+									return false
+								}
+								if _, ok := dbResourcesMap["mock-db-instance-8"]; !ok {
+									return false
+								}
+								if _, ok := dbResourcesMap["mock-adopted-db-instance-15"]; !ok {
+									return false
+								}
+								if _, ok := dbResourcesMap["mock-db-instance-delete-1"]; !ok {
+									return false
+								}
+								if _, ok := dbResourcesMap["mock-db-cluster-1"]; !ok {
+									return false
+								}
+								if _, ok := dbResourcesMap["mock-db-cluster-2"]; !ok {
+									return false
+								}
+								if _, ok := dbResourcesMap["mock-db-cluster-3"]; !ok {
+									return false
+								}
+								if _, ok := dbResourcesMap["mock-db-cluster-4"]; !ok {
+									return false
+								}
+								if _, ok := dbResourcesMap["mock-db-cluster-7"]; !ok {
+									return false
+								}
+								if _, ok := dbResourcesMap["mock-db-cluster-8"]; !ok {
+									return false
+								}
+								if _, ok := dbResourcesMap["mock-adopted-db-cluster-20"]; !ok {
+									return false
+								}
+								if _, ok := dbResourcesMap["mock-db-cluster-delete-1"]; !ok {
+									return false
+								}
+
+								for i := range adoptedDBResources.Items {
+									resource := adoptedDBResources.Items[i]
+									if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(&resource), &resource); err != nil {
+										return false
+									}
+									resource.Status.Conditions = []*ackv1alpha1.Condition{
+										{
+											Type:   ackv1alpha1.ConditionTypeAdopted,
+											Status: v1.ConditionTrue,
+										},
+									}
+									if err := k8sClient.Status().Update(ctx, &resource); err != nil {
+										return false
+									}
+								}
+								return true
+							}, timeout).Should(BeTrue())
+
+							assertResourceCreation(mockDeleteDBInstance1)()
+							Eventually(func() bool {
+								if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(mockDeleteDBInstance1), mockDeleteDBInstance1); err != nil {
+									return false
+								}
+								arn := ackv1alpha1.AWSResourceName("mock-db-instance-delete-1")
+								ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+								region := ackv1alpha1.AWSRegion("us-east-1")
+								mockDeleteDBInstance1.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+									ARN:            &arn,
+									OwnerAccountID: &ownerAccountID,
+									Region:         &region,
+								}
+								if err := k8sClient.Status().Update(ctx, mockDeleteDBInstance1); err != nil {
+									return false
+								}
+								return true
+							}, timeout).Should(BeTrue())
+
+							assertResourceCreation(mockDeleteDBCluster1)()
+							Eventually(func() bool {
+								if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(mockDeleteDBCluster1), mockDeleteDBCluster1); err != nil {
+									return false
+								}
+								arn := ackv1alpha1.AWSResourceName("mock-db-cluster-delete-1")
+								ownerAccountID := ackv1alpha1.AWSAccountID("testOwnerId")
+								region := ackv1alpha1.AWSRegion("us-east-1")
+								mockDeleteDBCluster1.Status.ACKResourceMetadata = &ackv1alpha1.ResourceMetadata{
+									ARN:            &arn,
+									OwnerAccountID: &ownerAccountID,
+									Region:         &region,
+								}
+								if err := k8sClient.Status().Update(ctx, mockDeleteDBCluster1); err != nil {
+									return false
+								}
+								return true
+							}, timeout).Should(BeTrue())
+
+							test.SetInventoryTestDBInstanceCounter(5)
+							test.SetInventoryTestDBClusterCounter(5)
+
+							inv := &rdsdbaasv1alpha1.RDSInventory{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:      inventoryName,
+									Namespace: testNamespace,
+								},
+							}
+							Eventually(func() bool {
+								if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(inv), inv); err != nil {
+									return false
+								}
+								condition := apimeta.FindStatusCondition(inv.Status.Conditions, "SpecSynced")
+								if condition == nil || condition.Status != metav1.ConditionTrue || condition.Reason != "SyncOK" {
+									return false
+								}
+								return true
+							}, timeout).Should(BeTrue())
+
+							Eventually(func() bool {
+								By("checking if the adopted resources are deleted")
+								adoptedDBResources := &ackv1alpha1.AdoptedResourceList{}
+								if err := k8sClient.List(ctx, adoptedDBResources, client.InNamespace(testNamespace)); err != nil {
+									return false
+								}
+								for i := range adoptedDBResources.Items {
+									db := adoptedDBResources.Items[i]
+									if db.Spec.AWS.NameOrID == "mock-db-instance-delete-1" {
+										return false
+									}
+									if db.Spec.AWS.NameOrID == "mock-db-cluster-delete-1" {
+										return false
+									}
+								}
+
+								adoptedDBInstances := &rdsv1alpha1.DBInstanceList{}
+								if err := k8sClient.List(ctx, adoptedDBInstances, client.InNamespace(testNamespace)); err != nil {
+									return false
+								}
+								for i := range adoptedDBInstances.Items {
+									db := adoptedDBInstances.Items[i]
+									if db.Spec.DBInstanceIdentifier != nil && *db.Spec.DBInstanceIdentifier == "mock-db-instance-delete-1" {
+										return false
+									}
+								}
+
+								adoptedDBClusters := &rdsv1alpha1.DBClusterList{}
+								if err := k8sClient.List(ctx, adoptedDBClusters, client.InNamespace(testNamespace)); err != nil {
+									return false
+								}
+								for i := range adoptedDBClusters.Items {
+									db := adoptedDBClusters.Items[i]
+									if db.Spec.DBClusterIdentifier != nil && *db.Spec.DBClusterIdentifier == "mock-db-cluster-delete-1" {
+										return false
+									}
+								}
+
+								return true
+							}, timeout).Should(BeTrue())
+						})
 					})
 
 					Context("when is ACK controller is scaled down", func() {

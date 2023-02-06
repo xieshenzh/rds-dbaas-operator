@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"k8s.io/utils/pointer"
 
@@ -28,6 +29,16 @@ import (
 
 	controllersrds "github.com/RHEcosystemAppEng/rds-dbaas-operator/controllers/rds"
 )
+
+var inventoryTestDBClusterCounter int32 = 6
+
+func GetInventoryTestDBClusterCounter() int32 {
+	return atomic.LoadInt32(&inventoryTestDBClusterCounter)
+}
+
+func SetInventoryTestDBClusterCounter(counter int32) {
+	atomic.StoreInt32(&inventoryTestDBClusterCounter, counter)
+}
 
 var inventoryTestDBClusters = []*rds.DescribeDBClustersOutput{
 	{
@@ -222,6 +233,17 @@ var inventoryTestDBClusters = []*rds.DescribeDBClustersOutput{
 			},
 		},
 	},
+	{
+		// To be deleted
+		DBClusters: []types.DBCluster{
+			{
+				DBClusterIdentifier: pointer.String("mock-db-cluster-delete-1"),
+				Status:              pointer.String("available"),
+				Engine:              pointer.String("postgres"),
+				DBClusterArn:        pointer.String("mock-db-cluster-delete-1"),
+			},
+		},
+	},
 }
 
 var connectionTestDBClusters = []*rds.DescribeDBClustersOutput{
@@ -250,7 +272,7 @@ type mockDescribeDBClustersPaginator struct {
 func NewDescribeDBClustersPaginator(accessKey, secretKey, region string) controllersrds.DescribeDBClustersPaginatorAPI {
 	counter := 0
 	if strings.HasSuffix(accessKey, ClusterInventoryControllerTestAccessKeySuffix) {
-		counter = 5
+		counter = int(GetInventoryTestDBClusterCounter())
 	} else if strings.HasSuffix(accessKey, ClusterConnectionControllerTestAccessKeySuffix) {
 		counter = 1
 	}
