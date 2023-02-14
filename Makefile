@@ -10,7 +10,7 @@ OPERATOR_SDK_VERSION ?= v1.25.4
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 0.3.0
 
-RDS_VERSION ?= 0.1.3
+RDS_VERSION ?= 1.0.0
 
 # QUAY_ORG indicates the organization that docker images will be build for & pushed to
 # CHANGE THIS TO YOUR OWN QUAY USERNAME FOR DEV/TESTING/PUSHING
@@ -277,7 +277,7 @@ RDS_TEMP = ./controllers/yaml/temp
 RDS_CONFIG = ./controllers/yaml/rds
 rds-crds-clean: ## Cleanup the RDS CRD files.
 	find $(RDS_CONFIG) -type f -delete
-	rm $(RDS_TEMP)/v$(RDS_VERSION).zip
+	rm $(RDS_TEMP)/*
 
 .PHONY: sdk
 SDK = ./bin/operator-sdk.$(OPERATOR_SDK_VERSION)
