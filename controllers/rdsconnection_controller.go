@@ -169,7 +169,7 @@ func (r *RDSConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	r.setConnectionReadyCondition(&connection, string(metav1.ConditionTrue),
 		connectionStatusReasonReady, "")
-	return
+	return ctrl.Result{}, nil
 }
 
 func (r *RDSConnectionReconciler) setConnectionReadyCondition(connection *rdsdbaasv1alpha1.RDSConnection,

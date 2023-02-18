@@ -82,17 +82,18 @@ const (
 
 	instanceStatusReasonDBInstance = "DBInstance"
 
-	instanceStatusMessageUpdateError         = "Failed to update Instance"
-	instanceStatusMessageCreating            = "Creating Instance"
-	instanceStatusMessageUpdating            = "Updating Instance"
-	instanceStatusMessageDeleting            = "Deleting Instance"
-	instanceStatusMessageError               = "Instance with error"
-	instanceStatusMessageCreateOrUpdateError = "Failed to create or update DB Instance"
-	instanceStatusMessageGetError            = "Failed to get DB Instance"
-	instanceStatusMessageDeleteError         = "Failed to delete DB Instance"
-	instanceStatusMessageInventoryNotFound   = "Inventory not found"
-	instanceStatusMessageInventoryNotReady   = "Inventory not ready"
-	instanceStatusMessageGetInventoryError   = "Failed to get Inventory"
+	instanceStatusMessageUpdateError       = "Failed to update Instance"
+	instanceStatusMessageCreating          = "Creating Instance"
+	instanceStatusMessageUpdating          = "Updating Instance"
+	instanceStatusMessageDeleting          = "Deleting Instance"
+	instanceStatusMessageError             = "Instance with error"
+	instanceStatusMessageGetError          = "Failed to get DB Instance"
+	instanceStatusMessageDeleteError       = "Failed to delete DB Instance"
+	instanceStatusMessageInventoryNotFound = "Inventory not found"
+	instanceStatusMessageInventoryNotReady = "Inventory not ready"
+	instanceStatusMessageGetInventoryError = "Failed to get Inventory"
+
+	instanceStatusMessageCreateOrUpdateErrorTemplate = "Failed to create or update DB Instance: %s"
 
 	requiredParameterErrorTemplate = "required parameter %s is missing"
 	invalidParameterErrorTemplate  = "value of parameter %s is invalid"
@@ -120,67 +121,16 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	var inventory rdsdbaasv1alpha1.RDSInventory
 	var instance rdsdbaasv1alpha1.RDSInstance
 
-	var provisionStatus, provisionStatusReason, provisionStatusMessage string
-	var phase dbaasv1beta1.DBaasInstancePhase
-
-	returnUpdating := func() {
-		result = ctrl.Result{Requeue: true}
-		err = nil
-		provisionStatus = string(metav1.ConditionUnknown)
-		provisionStatusReason = instanceStatusReasonUpdating
-		provisionStatusMessage = instanceStatusMessageUpdating
-	}
-
-	returnError := func(e error, reason, message string) {
-		result = ctrl.Result{}
-		err = e
-		provisionStatus = string(metav1.ConditionFalse)
-		if len(reason) > 0 {
-			provisionStatusReason = reason
+	if err = r.Get(ctx, req.NamespacedName, &instance); err != nil {
+		if errors.IsNotFound(err) {
+			logger.Info("RDS Instance resource not found, has been deleted")
+			return ctrl.Result{}, nil
 		}
-		if len(provisionStatusMessage) > 0 {
-			provisionStatusMessage = fmt.Sprintf("%s: %s", message, provisionStatusMessage)
-		} else {
-			provisionStatusMessage = message
-		}
+		logger.Error(err, "Failed to get RDS Instance")
+		return ctrl.Result{}, err
 	}
 
-	returnNotReady := func(reason, message string) {
-		result = ctrl.Result{}
-		err = nil
-		provisionStatus = string(metav1.ConditionFalse)
-		provisionStatusReason = reason
-		provisionStatusMessage = message
-	}
-
-	returnRequeue := func(reason, message string) {
-		result = ctrl.Result{Requeue: true}
-		err = nil
-		provisionStatus = string(metav1.ConditionFalse)
-		provisionStatusReason = reason
-		provisionStatusMessage = message
-	}
-
-	returnReady := func() {
-		result = ctrl.Result{}
-		err = nil
-		provisionStatus = string(metav1.ConditionTrue)
-		provisionStatusReason = instanceStatusReasonReady
-	}
-
-	updateInstanceReadyCondition := func() {
-		condition := metav1.Condition{
-			Type:    instanceConditionReady,
-			Status:  metav1.ConditionStatus(provisionStatus),
-			Reason:  provisionStatusReason,
-			Message: provisionStatusMessage,
-		}
-		apimeta.SetStatusCondition(&instance.Status.Conditions, condition)
-		if len(phase) > 0 {
-			instance.Status.Phase = phase
-		} else if len(instance.Status.Phase) == 0 {
-			instance.Status.Phase = dbaasv1beta1.InstancePhaseUnknown
-		}
+	defer func() {
 		if e := r.Status().Update(ctx, &instance); e != nil {
 			if errors.IsConflict(e) {
 				logger.Info("Instance modified, retry reconciling")
@@ -192,231 +142,253 @@ func (r *RDSInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				}
 			}
 		}
-	}
+	}()
 
-	checkFinalizer := func() bool {
-		if instance.ObjectMeta.DeletionTimestamp.IsZero() {
-			if !controllerutil.ContainsFinalizer(&instance, instanceFinalizer) {
-				phase = dbaasv1beta1.InstancePhasePending
-				controllerutil.AddFinalizer(&instance, instanceFinalizer)
-				if e := r.Update(ctx, &instance); e != nil {
-					if errors.IsConflict(e) {
-						logger.Info("Instance modified, retry reconciling")
-						returnUpdating()
-						return true
-					}
-					logger.Error(e, "Failed to add finalizer to Instance")
-					returnError(e, instanceStatusReasonBackendError, instanceStatusMessageUpdateError)
-					return true
-				}
-				logger.Info("Finalizer added to Instance")
-				returnNotReady(instanceStatusReasonUpdating, instanceStatusMessageUpdating)
-				return true
-			}
-		} else {
-			if controllerutil.ContainsFinalizer(&instance, instanceFinalizer) {
-				phase = dbaasv1beta1.InstancePhaseDeleting
-				dbInstance := &rdsv1alpha1.DBInstance{}
-				if e := r.Get(ctx, client.ObjectKey{Namespace: instance.Spec.InventoryRef.Namespace, Name: instance.Name}, dbInstance); e != nil {
-					if !errors.IsNotFound(e) {
-						logger.Error(e, "Failed to get DB Instance status")
-						returnError(e, instanceStatusReasonBackendError, instanceStatusMessageGetError)
-						return true
-					}
-				} else {
-					if e := r.Delete(ctx, dbInstance); e != nil {
-						logger.Error(e, "Failed to delete DB Instance")
-						returnError(e, instanceStatusReasonBackendError, instanceStatusMessageDeleteError)
-						return true
-					}
-					returnUpdating()
-					return true
-				}
-
-				controllerutil.RemoveFinalizer(&instance, instanceFinalizer)
-				if e := r.Update(ctx, &instance); e != nil {
-					if errors.IsConflict(e) {
-						logger.Info("Instance modified, retry reconciling")
-						returnUpdating()
-						return true
-					}
-					logger.Error(e, "Failed to remove finalizer from Instance")
-					returnError(e, instanceStatusReasonBackendError, instanceStatusMessageUpdateError)
-					return true
-				}
-				logger.Info("Finalizer removed from Instance")
-				phase = dbaasv1beta1.InstancePhaseDeleted
-				returnNotReady(instanceStatusReasonUpdating, instanceStatusMessageUpdating)
-				return true
-			}
-
-			// Stop reconciliation as the item is being deleted
-			returnNotReady(instanceStatusReasonDeleting, instanceStatusMessageDeleting)
-			return true
-		}
-
-		return false
-	}
-
-	createOrUpdateDBInstance := func() bool {
-		dbInstance := &rdsv1alpha1.DBInstance{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      instance.Name,
-				Namespace: inventory.Namespace,
-			},
-		}
-
-		if r, e := controllerutil.CreateOrUpdate(ctx, r.Client, dbInstance, func() error {
-			if e := ophandler.SetOwnerAnnotations(&instance, dbInstance); e != nil {
-				logger.Error(e, "Failed to set owner for DB Instance")
-				returnError(e, instanceStatusReasonBackendError, e.Error())
-				return e
-			}
-
-			secret := &v1.Secret{}
-			if e := r.Get(ctx, client.ObjectKey{Namespace: inventory.Namespace,
-				Name: inventory.Spec.CredentialsRef.Name}, secret); e != nil {
-				logger.Error(e, "Failed to get Inventory credentials for setting spec of DB Instance")
-				returnError(e, instanceStatusReasonInputError, e.Error())
-				return e
-			}
-
-			if e := r.setDBInstanceSpec(ctx, dbInstance, &instance, secret); e != nil {
-				logger.Error(e, "Failed to set spec for DB Instance")
-				returnError(e, instanceStatusReasonInputError, e.Error())
-				return e
-			}
-			return nil
-		}); e != nil {
-			logger.Error(e, "Failed to create or update DB Instance")
-			returnError(e, "", instanceStatusMessageCreateOrUpdateError)
-			return true
-		} else if r == controllerutil.OperationResultCreated {
-			phase = dbaasv1beta1.InstancePhaseCreating
-			returnRequeue(instanceStatusReasonCreating, instanceStatusMessageCreating)
-			return true
-		} else if r == controllerutil.OperationResultUpdated {
-			phase = dbaasv1beta1.InstancePhaseUpdating
-		}
-		return false
-	}
-
-	syncDBInstanceStatus := func() bool {
-		dbInstance := &rdsv1alpha1.DBInstance{}
-		if e := r.Get(ctx, client.ObjectKey{Namespace: inventory.Namespace, Name: instance.Name}, dbInstance); e != nil {
-			logger.Error(e, "Failed to get DB Instance status")
-			if errors.IsNotFound(e) {
-				returnError(e, instanceStatusReasonNotFound, instanceStatusMessageGetError)
-			} else {
-				returnError(e, instanceStatusReasonBackendError, instanceStatusMessageGetError)
-			}
-			return true
-		}
-
-		instance.Status.InstanceID = *dbInstance.Spec.DBInstanceIdentifier
-		setDBInstancePhase(dbInstance, &instance)
-		setDBInstanceStatus(dbInstance, &instance)
-		regex := regexp.MustCompile("^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$")
-		for _, condition := range dbInstance.Status.Conditions {
-			c := metav1.Condition{
-				Type:   string(condition.Type),
-				Status: metav1.ConditionStatus(condition.Status),
-			}
-			if condition.LastTransitionTime != nil {
-				c.LastTransitionTime = metav1.Time{Time: condition.LastTransitionTime.Time}
-			}
-			if condition.Reason != nil && len(*condition.Reason) > 0 {
-				if match := regex.MatchString(*condition.Reason); match {
-					c.Reason = *condition.Reason
-					if condition.Message != nil {
-						c.Message = *condition.Message
-					}
-				} else {
-					c.Reason = instanceStatusReasonDBInstance
-					if condition.Message != nil {
-						c.Message = fmt.Sprintf("Reason: %s, Message: %s", *condition.Reason, *condition.Message)
-					} else {
-						c.Message = fmt.Sprintf("Reason: %s", *condition.Reason)
-					}
-				}
-			} else {
-				c.Reason = instanceStatusReasonDBInstance
-				if condition.Message != nil {
-					c.Message = *condition.Message
-				}
-			}
-			apimeta.SetStatusCondition(&instance.Status.Conditions, c)
-		}
-
-		if e := r.Status().Update(ctx, &instance); e != nil {
-			if errors.IsConflict(e) {
-				logger.Info("Instance modified, retry reconciling")
-				returnUpdating()
-				return true
-			}
-			logger.Error(e, "Failed to sync Instance status")
-			returnError(e, instanceStatusReasonBackendError, instanceStatusMessageUpdateError)
-			return true
-		}
-		return false
-	}
-
-	if err = r.Get(ctx, req.NamespacedName, &instance); err != nil {
-		if errors.IsNotFound(err) {
-			logger.Info("RDS Instance resource not found, has been deleted")
-			return ctrl.Result{}, nil
-		}
-		logger.Error(err, "Failed to get RDS Instance")
-		return ctrl.Result{}, err
-	}
-
-	defer updateInstanceReadyCondition()
-
-	if checkFinalizer() {
-		return
+	if rt, rq, e := r.checkFinalizer(ctx, &instance); rt {
+		return ctrl.Result{}, nil
+	} else if rq {
+		return ctrl.Result{Requeue: true}, nil
+	} else if e != nil {
+		return ctrl.Result{}, nil
 	}
 
 	if e := r.Get(ctx, client.ObjectKey{Namespace: instance.Spec.InventoryRef.Namespace,
 		Name: instance.Spec.InventoryRef.Name}, &inventory); e != nil {
 		if errors.IsNotFound(e) {
 			logger.Info("RDS Inventory resource not found, may have been deleted")
-			returnError(e, instanceStatusReasonNotFound, instanceStatusMessageInventoryNotFound)
-			return
+			r.setInstanceReadyCondition(&instance, string(metav1.ConditionFalse), instanceStatusReasonNotFound, instanceStatusMessageInventoryNotFound, "")
+			return ctrl.Result{}, e
 		}
 		logger.Error(e, "Failed to get RDS Inventory")
-		returnError(e, instanceStatusReasonBackendError, instanceStatusMessageGetInventoryError)
-		return
+		r.setInstanceReadyCondition(&instance, string(metav1.ConditionFalse), instanceStatusReasonBackendError, instanceStatusMessageGetInventoryError, "")
+		return ctrl.Result{}, e
 	}
 
 	if condition := apimeta.FindStatusCondition(inventory.Status.Conditions, inventoryConditionReady); condition == nil ||
 		condition.Status != metav1.ConditionTrue {
 		logger.Info("RDS Inventory not ready")
-		returnRequeue(instanceStatusReasonUnreachable, instanceStatusMessageInventoryNotReady)
-		return
+		r.setInstanceReadyCondition(&instance, string(metav1.ConditionFalse), instanceStatusReasonUnreachable, instanceStatusMessageInventoryNotReady, "")
+		return ctrl.Result{Requeue: true}, nil
 	}
 
-	if createOrUpdateDBInstance() {
-		return
+	if rq, e := r.createOrUpdateDBInstance(ctx, &instance, &inventory); rq {
+		return ctrl.Result{Requeue: true}, nil
+	} else if e != nil {
+		return ctrl.Result{}, e
 	}
 
-	if syncDBInstanceStatus() {
-		return
+	if rq, e := r.syncDBInstanceStatus(ctx, &instance, &inventory); rq {
+		return ctrl.Result{Requeue: true}, nil
+	} else if e != nil {
+		return ctrl.Result{}, e
 	}
 
 	switch instance.Status.Phase {
 	case dbaasv1beta1.InstancePhaseReady:
-		returnReady()
+		r.setInstanceReadyCondition(&instance, string(metav1.ConditionTrue), instanceStatusReasonReady, "", "")
 	case dbaasv1beta1.InstancePhaseFailed, dbaasv1beta1.InstancePhaseDeleted:
-		returnNotReady(instanceStatusReasonTerminated, string(instance.Status.Phase))
+		r.setInstanceReadyCondition(&instance, string(metav1.ConditionFalse), instanceStatusReasonTerminated, string(instance.Status.Phase), "")
 	case dbaasv1beta1.InstancePhasePending, dbaasv1beta1.InstancePhaseCreating,
 		dbaasv1beta1.InstancePhaseUpdating, dbaasv1beta1.InstancePhaseDeleting:
-		returnUpdating()
+		r.setInstanceReadyCondition(&instance, string(metav1.ConditionUnknown), instanceStatusReasonUpdating, instanceStatusMessageUpdating, "")
+		return ctrl.Result{Requeue: true}, nil
 	case dbaasv1beta1.InstancePhaseError, dbaasv1beta1.InstancePhaseUnknown:
-		returnRequeue(instanceStatusReasonBackendError, instanceStatusMessageError)
+		r.setInstanceReadyCondition(&instance, string(metav1.ConditionFalse), instanceStatusReasonBackendError, instanceStatusMessageError, "")
+		return ctrl.Result{Requeue: true}, nil
 	default:
 	}
 
-	return
+	return ctrl.Result{}, nil
+}
+
+func (r *RDSInstanceReconciler) setInstanceReadyCondition(instance *rdsdbaasv1alpha1.RDSInstance,
+	provisionStatus, provisionStatusReason, provisionStatusMessage string, phase dbaasv1beta1.DBaasInstancePhase) {
+	if len(provisionStatus) > 0 {
+		condition := metav1.Condition{
+			Type:    instanceConditionReady,
+			Status:  metav1.ConditionStatus(provisionStatus),
+			Reason:  provisionStatusReason,
+			Message: provisionStatusMessage,
+		}
+		apimeta.SetStatusCondition(&instance.Status.Conditions, condition)
+	}
+	if len(phase) > 0 {
+		instance.Status.Phase = phase
+	} else if len(instance.Status.Phase) == 0 {
+		instance.Status.Phase = dbaasv1beta1.InstancePhaseUnknown
+	}
+}
+
+func (r *RDSInstanceReconciler) checkFinalizer(ctx context.Context, instance *rdsdbaasv1alpha1.RDSInstance) (bool, bool, error) {
+	logger := log.FromContext(ctx)
+
+	if instance.ObjectMeta.DeletionTimestamp.IsZero() {
+		if !controllerutil.ContainsFinalizer(instance, instanceFinalizer) {
+			controllerutil.AddFinalizer(instance, instanceFinalizer)
+			if e := r.Update(ctx, instance); e != nil {
+				if errors.IsConflict(e) {
+					logger.Info("Instance modified, retry reconciling")
+					r.setInstanceReadyCondition(instance, string(metav1.ConditionUnknown), instanceStatusReasonUpdating, instanceStatusMessageUpdating, dbaasv1beta1.InstancePhasePending)
+					return false, true, nil
+				}
+				logger.Error(e, "Failed to add finalizer to Instance")
+				r.setInstanceReadyCondition(instance, string(metav1.ConditionFalse), instanceStatusReasonBackendError, instanceStatusMessageUpdateError, dbaasv1beta1.InstancePhasePending)
+				return false, false, e
+			}
+			logger.Info("Finalizer added to Instance")
+			r.setInstanceReadyCondition(instance, string(metav1.ConditionFalse), instanceStatusReasonUpdating, instanceStatusMessageUpdating, dbaasv1beta1.InstancePhasePending)
+			return true, false, nil
+		}
+	} else {
+		if controllerutil.ContainsFinalizer(instance, instanceFinalizer) {
+			dbInstance := &rdsv1alpha1.DBInstance{}
+			if e := r.Get(ctx, client.ObjectKey{Namespace: instance.Spec.InventoryRef.Namespace, Name: instance.Name}, dbInstance); e != nil {
+				if !errors.IsNotFound(e) {
+					logger.Error(e, "Failed to get DB Instance status")
+					r.setInstanceReadyCondition(instance, string(metav1.ConditionFalse), instanceStatusReasonBackendError, instanceStatusMessageGetError, dbaasv1beta1.InstancePhaseDeleting)
+					return false, false, e
+				}
+			} else {
+				if e := r.Delete(ctx, dbInstance); e != nil {
+					logger.Error(e, "Failed to delete DB Instance")
+					r.setInstanceReadyCondition(instance, string(metav1.ConditionFalse), instanceStatusReasonBackendError, instanceStatusMessageDeleteError, dbaasv1beta1.InstancePhaseDeleting)
+					return false, false, e
+				}
+				r.setInstanceReadyCondition(instance, string(metav1.ConditionUnknown), instanceStatusReasonUpdating, instanceStatusMessageUpdating, dbaasv1beta1.InstancePhaseDeleting)
+				return false, true, nil
+			}
+
+			controllerutil.RemoveFinalizer(instance, instanceFinalizer)
+			if e := r.Update(ctx, instance); e != nil {
+				if errors.IsConflict(e) {
+					logger.Info("Instance modified, retry reconciling")
+					r.setInstanceReadyCondition(instance, string(metav1.ConditionUnknown), instanceStatusReasonUpdating, instanceStatusMessageUpdating, dbaasv1beta1.InstancePhaseDeleting)
+					return false, true, nil
+				}
+				logger.Error(e, "Failed to remove finalizer from Instance")
+				r.setInstanceReadyCondition(instance, string(metav1.ConditionFalse), instanceStatusReasonBackendError, instanceStatusMessageUpdateError, dbaasv1beta1.InstancePhaseDeleting)
+				return false, false, e
+			}
+			logger.Info("Finalizer removed from Instance")
+			r.setInstanceReadyCondition(instance, string(metav1.ConditionFalse), instanceStatusReasonUpdating, instanceStatusMessageUpdating, dbaasv1beta1.InstancePhaseDeleted)
+			return true, false, nil
+		}
+
+		// Stop reconciliation as the item is being deleted
+		r.setInstanceReadyCondition(instance, string(metav1.ConditionFalse), instanceStatusReasonDeleting, instanceStatusMessageDeleting, "")
+		return true, false, nil
+	}
+
+	return false, false, nil
+}
+
+func (r *RDSInstanceReconciler) createOrUpdateDBInstance(ctx context.Context, instance *rdsdbaasv1alpha1.RDSInstance,
+	inventory *rdsdbaasv1alpha1.RDSInventory) (bool, error) {
+	logger := log.FromContext(ctx)
+
+	dbInstance := &rdsv1alpha1.DBInstance{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      instance.Name,
+			Namespace: inventory.Namespace,
+		},
+	}
+	if result, e := controllerutil.CreateOrUpdate(ctx, r.Client, dbInstance, func() error {
+		if e := ophandler.SetOwnerAnnotations(instance, dbInstance); e != nil {
+			logger.Error(e, "Failed to set owner for DB Instance")
+			r.setInstanceReadyCondition(instance, string(metav1.ConditionFalse), instanceStatusReasonBackendError,
+				fmt.Sprintf(instanceStatusMessageCreateOrUpdateErrorTemplate, e.Error()), "")
+			return e
+		}
+
+		secret := &v1.Secret{}
+		if e := r.Get(ctx, client.ObjectKey{Namespace: inventory.Namespace,
+			Name: inventory.Spec.CredentialsRef.Name}, secret); e != nil {
+			logger.Error(e, "Failed to get Inventory credentials for setting spec of DB Instance")
+			r.setInstanceReadyCondition(instance, string(metav1.ConditionFalse), instanceStatusReasonInputError,
+				fmt.Sprintf(instanceStatusMessageCreateOrUpdateErrorTemplate, e.Error()), "")
+			return e
+		}
+
+		if e := r.setDBInstanceSpec(ctx, dbInstance, instance, secret); e != nil {
+			logger.Error(e, "Failed to set spec for DB Instance")
+			r.setInstanceReadyCondition(instance, string(metav1.ConditionFalse), instanceStatusReasonInputError,
+				fmt.Sprintf(instanceStatusMessageCreateOrUpdateErrorTemplate, e.Error()), "")
+			return e
+		}
+		return nil
+	}); e != nil {
+		logger.Error(e, "Failed to create or update DB Instance")
+		return false, e
+	} else if result == controllerutil.OperationResultCreated {
+		r.setInstanceReadyCondition(instance, string(metav1.ConditionFalse), instanceStatusReasonCreating, instanceStatusMessageCreating, dbaasv1beta1.InstancePhaseCreating)
+		return true, nil
+	} else if result == controllerutil.OperationResultUpdated {
+		r.setInstanceReadyCondition(instance, "", "", "", dbaasv1beta1.InstancePhaseUpdating)
+	}
+	return false, nil
+}
+
+func (r *RDSInstanceReconciler) syncDBInstanceStatus(ctx context.Context, instance *rdsdbaasv1alpha1.RDSInstance,
+	inventory *rdsdbaasv1alpha1.RDSInventory) (bool, error) {
+	logger := log.FromContext(ctx)
+
+	dbInstance := &rdsv1alpha1.DBInstance{}
+	if e := r.Get(ctx, client.ObjectKey{Namespace: inventory.Namespace, Name: instance.Name}, dbInstance); e != nil {
+		logger.Error(e, "Failed to get DB Instance status")
+		if errors.IsNotFound(e) {
+			r.setInstanceReadyCondition(instance, string(metav1.ConditionFalse), instanceStatusReasonNotFound, instanceStatusMessageGetError, "")
+		} else {
+			r.setInstanceReadyCondition(instance, string(metav1.ConditionFalse), instanceStatusReasonBackendError, instanceStatusMessageGetError, "")
+		}
+		return false, e
+	}
+
+	instance.Status.InstanceID = *dbInstance.Spec.DBInstanceIdentifier
+	setDBInstancePhase(dbInstance, instance)
+	setDBInstanceStatus(dbInstance, instance)
+	regex := regexp.MustCompile("^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$")
+	for _, condition := range dbInstance.Status.Conditions {
+		c := metav1.Condition{
+			Type:   string(condition.Type),
+			Status: metav1.ConditionStatus(condition.Status),
+		}
+		if condition.LastTransitionTime != nil {
+			c.LastTransitionTime = metav1.Time{Time: condition.LastTransitionTime.Time}
+		}
+		if condition.Reason != nil && len(*condition.Reason) > 0 {
+			if match := regex.MatchString(*condition.Reason); match {
+				c.Reason = *condition.Reason
+				if condition.Message != nil {
+					c.Message = *condition.Message
+				}
+			} else {
+				c.Reason = instanceStatusReasonDBInstance
+				if condition.Message != nil {
+					c.Message = fmt.Sprintf("Reason: %s, Message: %s", *condition.Reason, *condition.Message)
+				} else {
+					c.Message = fmt.Sprintf("Reason: %s", *condition.Reason)
+				}
+			}
+		} else {
+			c.Reason = instanceStatusReasonDBInstance
+			if condition.Message != nil {
+				c.Message = *condition.Message
+			}
+		}
+		apimeta.SetStatusCondition(&instance.Status.Conditions, c)
+	}
+
+	if e := r.Status().Update(ctx, instance); e != nil {
+		if errors.IsConflict(e) {
+			logger.Info("Instance modified, retry reconciling")
+			r.setInstanceReadyCondition(instance, string(metav1.ConditionUnknown), instanceStatusReasonUpdating, instanceStatusMessageUpdating, "")
+			return true, nil
+		}
+		logger.Error(e, "Failed to sync Instance status")
+		r.setInstanceReadyCondition(instance, string(metav1.ConditionFalse), instanceStatusReasonBackendError, instanceStatusMessageUpdateError, "")
+		return false, e
+	}
+	return false, nil
 }
 
 func (r *RDSInstanceReconciler) setDBInstanceSpec(ctx context.Context, dbInstance *rdsv1alpha1.DBInstance,
