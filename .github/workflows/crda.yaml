@@ -6,8 +6,6 @@ on:
       - edited
       - reopened
       - synchronize
-      - converted_to_draft
-      - ready_for_review
     branches:
       - main
       - crda-test
